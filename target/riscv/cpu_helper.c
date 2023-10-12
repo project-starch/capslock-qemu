@@ -30,6 +30,7 @@
 #include "semihosting/common-semi.h"
 #include "sysemu/cpu-timers.h"
 #include "cpu_bits.h"
+#include "cap.h"
 #include "debug.h"
 #include "tcg/oversized-guest.h"
 
@@ -1571,7 +1572,7 @@ static target_ulong riscv_transformed_insn(CPURISCVState *env,
     }
 
     if (access_size) {
-        xinsn = SET_RS1(xinsn, (taddr - (env->gpr[access_rs1] + access_imm)) &
+        xinsn = SET_RS1(xinsn, (taddr - (env->gpr[access_rs1].val.scalar + access_imm)) &
                                (access_size - 1));
     }
 
@@ -1783,4 +1784,22 @@ void riscv_cpu_do_interrupt(CPUState *cs)
     env->two_stage_indirect_lookup = false;
 #endif
     cs->exception_index = RISCV_EXCP_NONE; /* mark handled to qemu */
+}
+
+
+bool capstone_pre_mem_access(CPUState* cs, void* haddr, int size, MMUAccessType access_type) {
+    CPURISCVState* env = cs->env_ptr;
+    capperms_t access;
+    switch(access_type) {
+        case MMU_DATA_LOAD:
+            access = CAP_PERMS_RO;
+            break;
+        case MMU_DATA_STORE:
+            access = CAP_PERMS_WO;
+            break;
+        case MMU_INST_FETCH:
+            access = CAP_PERMS_XO;
+            break;
+    }
+    return capreg_allow_access(&env->mmu_cap, (capaddr_t)haddr, (capaddr_t)size, access);
 }

@@ -1942,6 +1942,16 @@ static bool mmu_lookup(CPUArchState *env, vaddr addr, MemOpIdx oi,
         tcg_debug_assert((flags & TLB_BSWAP) == 0);
     }
 
+
+    CPUState *cpu = env_cpu(env);
+    if(cpu->cc->tcg_ops->pre_mem_access) {
+        int size = memop_size(l->memop);
+        if(!cpu->cc->tcg_ops->pre_mem_access(cpu, l->page[0].haddr, size, type)) {
+            // TODO: handle this properly
+            while(1);
+        }
+    }
+
     return crosspage;
 }
 

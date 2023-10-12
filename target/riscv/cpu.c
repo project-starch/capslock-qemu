@@ -37,6 +37,7 @@
 #include "sysemu/tcg.h"
 #include "kvm_riscv.h"
 #include "tcg/tcg.h"
+#include "cap.h"
 
 /* RISC-V CPU definitions */
 static const char riscv_single_letter_exts[] = "IEMAFDQCPVH";
@@ -398,6 +399,13 @@ static void rv64_base_cpu_init(Object *obj)
 #ifndef CONFIG_USER_ONLY
     set_satp_mode_max_supported(RISCV_CPU(obj), VM_1_10_SV57);
 #endif
+
+    /* TODO: hack for now */
+    env->mmu_cap.tag = true;
+    env->mmu_cap.val.cap.bounds.cursor = 0x0;
+    env->mmu_cap.val.cap.bounds.base = 0x0;
+    env->mmu_cap.val.cap.bounds.end = 0x8000000000000ULL;
+    env->mmu_cap.val.cap.perms = CAP_PERMS_RWX;
 }
 
 static void rv64_sifive_u_cpu_init(Object *obj)
@@ -713,7 +721,7 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 
     for (i = 0; i < 32; i++) {
         qemu_fprintf(f, " %-8s " TARGET_FMT_lx,
-                     riscv_int_regnames[i], env->gpr[i]);
+                     riscv_int_regnames[i], env->gpr[i].val.scalar);
         if ((i & 3) == 3) {
             qemu_fprintf(f, "\n");
         }
@@ -2019,6 +2027,7 @@ static const struct TCGCPUOps riscv_tcg_ops = {
 
 #ifndef CONFIG_USER_ONLY
     .tlb_fill = riscv_cpu_tlb_fill,
+    .pre_mem_access = capstone_pre_mem_access,
     .cpu_exec_interrupt = riscv_cpu_exec_interrupt,
     .do_interrupt = riscv_cpu_do_interrupt,
     .do_transaction_failed = riscv_cpu_do_transaction_failed,

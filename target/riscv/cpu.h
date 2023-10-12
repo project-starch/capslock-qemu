@@ -30,6 +30,7 @@
 #include "cpu_cfg.h"
 #include "qapi/qapi-types-common.h"
 #include "cpu-qom.h"
+#include "cap.h"
 
 #define TCG_GUEST_DEFAULT_MO 0
 
@@ -123,7 +124,8 @@ typedef struct PMUCTRState {
 } PMUCTRState;
 
 struct CPUArchState {
-    target_ulong gpr[32];
+    // target_ulong gpr[32];
+    capregval_t gpr[32];
     target_ulong gprh[32]; /* 64 top bits of the 128-bit registers */
 
     /* vector coprocessor state. */
@@ -368,6 +370,10 @@ struct CPUArchState {
     hwaddr kernel_addr;
     hwaddr fdt_addr;
 
+    /* CSRs for Capstone */
+    // TODO: add these to the VM migration state
+    capregval_t mmu_cap; /* capability for use with MMU-based memory accesses */
+
 #ifdef CONFIG_KVM
     /* kvm timer */
     bool kvm_timer_dirty;
@@ -444,6 +450,9 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 char *riscv_isa_string(RISCVCPU *cpu);
 void riscv_cpu_list(void);
 void riscv_cpu_validate_set_extensions(RISCVCPU *cpu, Error **errp);
+
+
+bool capstone_pre_mem_access(CPUState* cs, void* haddr, int size, MMUAccessType access_type);
 
 #define cpu_list riscv_cpu_list
 #define cpu_mmu_index riscv_cpu_mmu_index

@@ -54,7 +54,7 @@ int riscv_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
     target_ulong tmp;
 
     if (n < 32) {
-        tmp = env->gpr[n];
+        tmp = env->gpr[n].val.scalar;
     } else if (n == 32) {
         tmp = env->pc;
     } else {
@@ -98,7 +98,7 @@ int riscv_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
         g_assert_not_reached();
     }
     if (n > 0 && n < 32) {
-        env->gpr[n] = tmp;
+        env->gpr[n].val.scalar = tmp;
     } else if (n == 32) {
         env->pc = tmp;
     }

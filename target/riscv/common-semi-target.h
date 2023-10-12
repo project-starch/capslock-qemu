@@ -15,14 +15,14 @@ static inline target_ulong common_semi_arg(CPUState *cs, int argno)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
-    return env->gpr[xA0 + argno];
+    return env->gpr[xA0 + argno].val.scalar;
 }
 
 static inline void common_semi_set_ret(CPUState *cs, target_ulong ret)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
-    env->gpr[xA0] = ret;
+    env->gpr[xA0].val.scalar = ret;
 }
 
 static inline bool common_semi_sys_exit_extended(CPUState *cs, int nr)
@@ -39,7 +39,7 @@ static inline target_ulong common_semi_stack_bottom(CPUState *cs)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
-    return env->gpr[xSP];
+    return env->gpr[xSP].val.scalar;
 }
 
 static inline bool common_semi_has_synccache(CPUArchState *env)
