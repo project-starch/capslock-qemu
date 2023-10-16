@@ -63,3 +63,24 @@ static bool trans_cstighten(DisasContext *ctx, arg_cstighten *a) {
     gen_helper_cstighten(cpu_env, rd, rs1, imm);
     return true;
 }
+
+static bool trans_csdelin(DisasContext *ctx, arg_csdelin *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    gen_helper_csdelin(cpu_env, rd);
+    return true;
+}
+
+static bool trans_csinit(DisasContext *ctx, arg_csinit *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
+    gen_helper_csinit(cpu_env, rd, rs1, rs2);
+    return true;
+}
+
+static bool trans_csseal(DisasContext *ctx, arg_csseal *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    gen_helper_csseal(cpu_env, rd, rs1);
+    return true;
+}

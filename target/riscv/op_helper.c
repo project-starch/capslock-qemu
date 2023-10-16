@@ -734,3 +734,39 @@ void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t pe
 
     rd_v->val.cap.perms = perms_p;
 }
+
+void helper_csdelin(CPURISCVState *env, uint32_t rd) {
+    capregval_t* rd_v = &env->gpr[rd];
+
+    assert(rd_v->tag);
+    assert(rd_v->val.cap.type == CAP_TYPE_LIN);
+
+    rd_v->val.cap.type = CAP_TYPE_NONLIN;
+}
+
+void helper_csinit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+    capregval_t* rs2_v = &env->gpr[rs2];
+
+    assert(rs1_v->tag && !rs2_v->tag);
+    assert(rs1_v->val.cap.type == CAP_TYPE_UNINIT);
+    assert(rs1_v->val.cap.bounds.cursor == rs1_v->val.cap.bounds.end);
+
+    capaddr_t offset = rs2_v->val.scalar;
+
+    if(rs1 != rd) {
+        *rd_v = *rs1_v;
+        if(!captype_is_copyable(rs1_v->val.cap.type)) {
+            *rs1_v = CAPREGVAL_NULL;
+        }
+    }
+
+    rd_v->val.cap.type = CAP_TYPE_LIN;
+    rd_v->val.cap.bounds.cursor = rd_v->val.cap.bounds.base + offset;
+}
+
+void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+    assert(false); // FIXME: unimplemented
+}
+
