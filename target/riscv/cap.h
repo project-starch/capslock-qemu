@@ -20,12 +20,12 @@ enum CapPerms {
 typedef enum CapPerms capperms_t;
 
 enum CapType {
-    CAP_TPYE_LIN        = 0x0,
+    CAP_TYPE_LIN        = 0x0,
     CAP_TYPE_NONLIN     = 0x1,
-    CAP_TPYE_REV        = 0x2,
+    CAP_TYPE_REV        = 0x2,
     CAP_TYPE_UNINIT     = 0x3,
-    CAP_TPYE_SEALED     = 0x4,
-    CAP_TPYE_SEALEDRET  = 0x5
+    CAP_TYPE_SEALED     = 0x4,
+    CAP_TYPE_SEALEDRET  = 0x5
 };
 
 typedef enum CapType captype_t;
@@ -70,6 +70,8 @@ struct CapRegVal {
 
 typedef struct CapRegVal capregval_t;
 
+static const capregval_t CAPREGVAL_NULL = {0};
+
 static inline bool cap_perms_allow(capperms_t perms, capperms_t access) {
     return (access & perms) == access;
 }
@@ -82,6 +84,15 @@ bool cap_allow_access(capfat_t* cap, capaddr_t base, capaddr_t size, capperms_t 
 
 static inline bool capreg_allow_access(capregval_t* capreg, capaddr_t base, capaddr_t size, capperms_t access) {
     return capreg->tag && cap_allow_access(&capreg->val.cap, base, size, access);
+}
+
+static inline bool captype_is_copyable(captype_t ty) {
+    return ty == CAP_TYPE_NONLIN;
+}
+
+static inline void capregval_set_scalar(capregval_t* capreg, capaddr_t v) {
+    capreg->tag = false;
+    capreg->val.scalar = v;
 }
 
 #endif

@@ -1182,3 +1182,14 @@ DEF_HELPER_5(vfwcvtbf16_f_f_v, void, ptr, ptr, ptr, env, i32)
 
 DEF_HELPER_6(vfwmaccbf16_vv, void, ptr, ptr, ptr, ptr, env, i32)
 DEF_HELPER_6(vfwmaccbf16_vf, void, ptr, ptr, i64, ptr, env, i32)
+
+
+/* Capstone helpers */
+DEF_HELPER_3(csmovc, void, env, i32, i32)
+DEF_HELPER_4(cscincoffset, void, env, i32, i32, i32)
+DEF_HELPER_4(cscincoffsetimm, void, env, i32, i32, tl)
+DEF_HELPER_4(csscc, void, env, i32, i32, i32)
+DEF_HELPER_4(cslcc, void, env, i32, i32, i32)
+DEF_HELPER_4(csshrink, void, env, i32, i32, i32)
+DEF_HELPER_4(cssplit, void, env, i32, i32, i32)
+DEF_HELPER_4(cstighten, void, env, i32, i32, i32)

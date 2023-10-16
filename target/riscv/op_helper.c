@@ -24,6 +24,7 @@
 #include "qemu/main-loop.h"
 #include "exec/exec-all.h"
 #include "exec/helper-proto.h"
+#include <assert.h>
 
 /* Exceptions processing helpers */
 G_NORETURN void riscv_raise_exception(CPURISCVState *env,
@@ -543,3 +544,193 @@ target_ulong helper_hyp_hlvx_wu(CPURISCVState *env, target_ulong addr)
 }
 
 #endif /* !CONFIG_USER_ONLY */
+
+/* Capstone helpers */
+
+void helper_csmovc(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+
+    assert(rs1_v->tag); // TODO: let's worry invalid operations later
+
+    if(rs1 != rd) {
+        *rd_v = *rs1_v;
+        if(!captype_is_copyable(rs1_v->val.cap.type)) {
+            *rs1_v = CAPREGVAL_NULL;
+        }
+    }
+}
+
+void helper_cscincoffset(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+    capregval_t* rs2_v = &env->gpr[rs2];
+
+    assert(rs1_v->tag && !rs2_v->tag);
+
+    assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
+           rs1_v->val.cap.type != CAP_TYPE_SEALED);
+
+    capaddr_t offset = rs2_v->val.scalar;
+
+    if(rs1 != rd) {
+        *rd_v = *rs1_v;
+        if(!captype_is_copyable(rs1_v->val.cap.type)) {
+            *rs1_v = CAPREGVAL_NULL;
+        }
+    }
+
+    rd_v->val.cap.bounds.cursor += offset;
+}
+
+void helper_cscincoffsetimm(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t offset) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+
+    assert(rs1_v->tag);
+
+    assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
+           rs1_v->val.cap.type != CAP_TYPE_SEALED);
+
+    if(rs1 != rd) {
+        *rd_v = *rs1_v;
+        if(!captype_is_copyable(rs1_v->val.cap.type)) {
+            *rs1_v = CAPREGVAL_NULL;
+        }
+    }
+
+    rd_v->val.cap.bounds.cursor += offset;
+}
+
+void helper_csscc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+    capregval_t* rs2_v = &env->gpr[rs2];
+
+    assert(rs1_v->tag && !rs2_v->tag);
+
+    assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
+           rs1_v->val.cap.type != CAP_TYPE_SEALED);
+    
+    capaddr_t cursor = rs2_v->val.scalar;
+
+    if(rs1 != rd) {
+        *rd_v = *rs1_v;
+        if(!captype_is_copyable(rs1_v->val.cap.type)) {
+            *rs1_v = CAPREGVAL_NULL;
+        }
+    }
+
+    rd_v->val.cap.bounds.cursor = cursor;
+}
+
+void helper_cslcc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t imm) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+
+    assert(rs1_v->tag);
+    assert(imm != 2 || rs1_v->val.cap.type != CAP_TYPE_SEALED);
+    assert(imm != 4 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
+    assert(imm != 5 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
+    assert(imm != 6 || rs1_v->val.cap.type == CAP_TYPE_SEALED || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
+    assert(imm != 7 || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
+
+    switch(imm) {
+        case 0:
+            capregval_set_scalar(rd_v, 1); // TODO: let's say it's always valid for now
+            break;
+        case 1:
+            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.type);
+            break;
+        case 2:
+            capregval_set_scalar(rd_v, rs1_v->val.cap.bounds.cursor);
+            break;
+        case 3:
+            capregval_set_scalar(rd_v, rs1_v->val.cap.bounds.base);
+            break;
+        case 4:
+            capregval_set_scalar(rd_v, rs1_v->val.cap.bounds.end);
+            break;
+        case 5:
+            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.perms);
+            break;
+        case 6:
+            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.async);
+            break;
+        case 7:
+            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.reg);
+            break;
+        default:
+            capregval_set_scalar(rd_v, 0);
+    }
+}
+
+void helper_csshrink(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+    capregval_t* rs2_v = &env->gpr[rs2];
+
+    assert(rd_v->tag && !rs1_v->tag && !rs2_v->tag);
+    assert(rd_v->val.cap.type == CAP_TYPE_LIN || rd_v->val.cap.type == CAP_TYPE_NONLIN ||
+           rd_v->val.cap.type == CAP_TYPE_UNINIT);
+
+    capaddr_t base = rs1_v->val.scalar;
+    capaddr_t end = rs2_v->val.scalar;
+
+    assert(base < end);
+    assert(base >= rd_v->val.cap.bounds.base && end <= rd_v->val.cap.bounds.end);
+
+    rd_v->val.cap.bounds.base = base;
+    rd_v->val.cap.bounds.end = end;
+
+    if(rd_v->val.cap.bounds.cursor < base) {
+        rd_v->val.cap.bounds.cursor = base;
+    } else if(rd_v->val.cap.bounds.cursor > end) {
+        rd_v->val.cap.bounds.cursor = end;
+    }
+}
+
+void helper_cssplit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+    capregval_t* rs2_v = &env->gpr[rs2];
+
+    assert(rs1_v->tag && !rs2_v->tag);
+    assert(rs1_v->val.cap.type == CAP_TYPE_LIN || rs1_v->val.cap.type == CAP_TYPE_NONLIN);
+
+    capaddr_t mid = rs2_v->val.scalar;
+
+    assert(mid > rs1_v->val.cap.bounds.base && mid < rs1_v->val.cap.bounds.end);
+
+    if(rs1 != rd) {
+        *rd_v = *rs1_v;
+
+        rs1_v->val.cap.bounds.end = mid;
+        rs1_v->val.cap.bounds.cursor = rs1_v->val.cap.bounds.base;
+
+        rd_v->val.cap.bounds.base = mid;
+        rd_v->val.cap.bounds.cursor = mid;
+    }
+}
+
+void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t perms) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+
+    assert(rs1_v->tag);
+    assert(rs1_v->val.cap.type == CAP_TYPE_LIN || rs1_v->val.cap.type == CAP_TYPE_NONLIN ||
+           rs1_v->val.cap.type == CAP_TYPE_UNINIT);
+    
+    capperms_t perms_p = perms > 7 ? CAP_PERMS_NA : (capperms_t)perms;
+
+    assert(cap_perms_allow(rs1_v->val.cap.perms, perms_p));
+
+    if(rs1 != rd) {
+        *rd_v = *rs1_v;
+        if(!captype_is_copyable(rs1_v->val.cap.type)) {
+            *rs1_v = CAPREGVAL_NULL;
+        }
+    }
+
+    rd_v->val.cap.perms = perms_p;
+}
