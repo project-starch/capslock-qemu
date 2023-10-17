@@ -127,7 +127,7 @@ struct TCGCPUOps {
                      MMUAccessType access_type, int mmu_idx,
                      bool probe, uintptr_t retaddr);
 
-    bool (*pre_mem_access)(CPUState* cpu, void* haddr, int size,
+    bool (*pre_mem_access)(CPUState* cpu, hwaddr physaddr, int size,
         MMUAccessType access_type);
 
     /**

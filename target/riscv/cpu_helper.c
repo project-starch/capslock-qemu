@@ -781,7 +781,8 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
         use_background = true;
     }
 
-    if (mode == PRV_M || !riscv_cpu_cfg(env)->mmu) {
+    if (mode == PRV_M || !riscv_cpu_cfg(env)->mmu ||
+        mmu_access_type_is_cap(access_type)) {
         *physical = addr;
         *ret_prot = PAGE_READ | PAGE_WRITE | PAGE_EXEC;
         return TRANSLATE_SUCCESS;
@@ -1787,19 +1788,22 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 }
 
 
-bool capstone_pre_mem_access(CPUState* cs, void* haddr, int size, MMUAccessType access_type) {
+bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessType access_type) {
     CPURISCVState* env = cs->env_ptr;
     capperms_t access;
     switch(access_type) {
         case MMU_DATA_LOAD:
+        case MMU_CAP_DATA_LOAD:
             access = CAP_PERMS_RO;
             break;
         case MMU_DATA_STORE:
+        case MMU_CAP_DATA_STORE:
             access = CAP_PERMS_WO;
             break;
         case MMU_INST_FETCH:
+        case MMU_CAP_INST_FETCH:
             access = CAP_PERMS_XO;
             break;
     }
-    return capreg_allow_access(&env->mmu_cap, (capaddr_t)haddr, (capaddr_t)size, access);
+    return capreg_allow_access(&env->mmu_cap, (capaddr_t)physaddr, (capaddr_t)size, access);
 }

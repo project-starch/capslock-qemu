@@ -83,9 +83,19 @@ DECLARE_CLASS_CHECKERS(CPUClass, CPU,
 typedef enum MMUAccessType {
     MMU_DATA_LOAD  = 0,
     MMU_DATA_STORE = 1,
-    MMU_INST_FETCH = 2
-#define MMU_ACCESS_COUNT 3
+    MMU_INST_FETCH = 2,
+    // Mem accesses using capabilities
+    MMU_CAP_DATA_LOAD = 3,
+    MMU_CAP_DATA_STORE = 4,
+    MMU_CAP_INST_FETCH = 6
+#define MMU_ACCESS_COUNT 6
 } MMUAccessType;
+
+static inline bool mmu_access_type_is_cap(MMUAccessType ty) {
+    return ty == MMU_CAP_DATA_LOAD ||
+           ty == MMU_CAP_DATA_STORE ||
+           ty == MMU_CAP_INST_FETCH;
+}
 
 typedef struct CPUWatchpoint CPUWatchpoint;
 
