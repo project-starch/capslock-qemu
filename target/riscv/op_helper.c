@@ -770,3 +770,39 @@ void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     assert(false); // FIXME: unimplemented
 }
 
+void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccsr_id) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+    capregval_t tmp;
+
+    CPUState* cpu = env_cpu(env);
+
+    assert(rs1_v->tag);
+
+    switch(ccsr_id) {
+        case 0x0:
+            // TODO: ceh
+            break;
+        case 0x1:
+            // TODO: cih
+            break;
+        case 0x2:
+            // TODO: cinit
+            break;
+        case 0x3:
+            // TODO: epc
+            break;
+        case 0x4:
+            // cmmu
+            tmp = env->cmmu;
+            env->cmmu = *rs1_v;
+            if(!captype_is_copyable(rs1_v->val.cap.type)) {
+                *rs1_v = CAPREGVAL_NULL;
+            }
+            *rd_v = tmp;
+            tlb_flush(cpu);
+            break;
+        default:
+            assert(false); // not a valid CCSR
+    }
+}

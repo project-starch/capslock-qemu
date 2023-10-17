@@ -401,11 +401,11 @@ static void rv64_base_cpu_init(Object *obj)
 #endif
 
     /* TODO: hack for now */
-    env->mmu_cap.tag = true;
-    env->mmu_cap.val.cap.bounds.cursor = 0x0;
-    env->mmu_cap.val.cap.bounds.base = 0x0;
-    env->mmu_cap.val.cap.bounds.end = 0x8000000000000ULL;
-    env->mmu_cap.val.cap.perms = CAP_PERMS_RWX;
+    env->cmmu.tag = true;
+    env->cmmu.val.cap.bounds.cursor = 0x0;
+    env->cmmu.val.cap.bounds.base = 0x0;
+    env->cmmu.val.cap.bounds.end = 0x8000000000000ULL;
+    env->cmmu.val.cap.perms = CAP_PERMS_RWX;
 }
 
 static void rv64_sifive_u_cpu_init(Object *obj)

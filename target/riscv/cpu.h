@@ -372,7 +372,7 @@ struct CPUArchState {
 
     /* CSRs for Capstone */
     // TODO: add these to the VM migration state
-    capregval_t mmu_cap; /* capability for use with MMU-based memory accesses */
+    capregval_t cmmu; /* capability for use with MMU-based memory accesses */
 
 #ifdef CONFIG_KVM
     /* kvm timer */

@@ -1805,5 +1805,5 @@ bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessT
             access = CAP_PERMS_XO;
             break;
     }
-    return capreg_allow_access(&env->mmu_cap, (capaddr_t)physaddr, (capaddr_t)size, access);
+    return capreg_allow_access(&env->cmmu, (capaddr_t)physaddr, (capaddr_t)size, access);
 }

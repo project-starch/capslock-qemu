@@ -84,3 +84,11 @@ static bool trans_csseal(DisasContext *ctx, arg_csseal *a) {
     gen_helper_csseal(cpu_env, rd, rs1);
     return true;
 }
+
+static bool trans_csccsrrw(DisasContext *ctx, arg_csccsrrw *a) {
+    TCGv imm = tcg_constant_tl(a->imm);
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    gen_helper_csccsrrw(cpu_env, rd, rs1, imm);
+    return true;
+}
