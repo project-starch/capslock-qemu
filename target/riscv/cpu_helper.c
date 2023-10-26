@@ -33,6 +33,7 @@
 #include "cap.h"
 #include "debug.h"
 #include "tcg/oversized-guest.h"
+#include "capstone_defs.h"
 
 int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch)
 {
@@ -142,6 +143,9 @@ void cpu_get_tb_cpu_state(CPURISCVState *env, vaddr *pc,
     }
     if (env->cur_pmbase != 0) {
         flags = FIELD_DP32(flags, TB_FLAGS, PM_BASE_ENABLED, 1);
+    }
+    if (env->cap_mem) {
+        flags = FIELD_DP32(flags, TB_FLAGS, CAP_MEM, 1);
     }
 
     *pflags = flags;

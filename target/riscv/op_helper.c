@@ -24,6 +24,8 @@
 #include "qemu/main-loop.h"
 #include "exec/exec-all.h"
 #include "exec/helper-proto.h"
+#include "capstone_defs.h"
+#include "cap_mem_map.h"
 #include <assert.h>
 
 /* Exceptions processing helpers */
@@ -806,3 +808,86 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
             assert(false); // not a valid CCSR
     }
 }
+
+/* Capability-based memory access */
+
+#define CAPSTONE_IMM12_SEXT(x) ((x) | (((-((x) >> 11)) << 12)))
+
+static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, uint32_t memop, bool is_store) {
+    CAPSTONE_DEBUG_PRINT("Cap mem access %u %lx\n", rs1, imm);
+
+    capregval_t* rs1_v = &env->gpr[rs1];
+
+    if(!rs1_v->tag) {
+        CAPSTONE_DEBUG_PRINT("Cap mem access requires capability\n");
+        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+    }
+
+    capfat_t* cap = &rs1_v->val.cap;
+    unsigned size = memop_size((MemOp)memop);
+    imm = CAPSTONE_IMM12_SEXT(imm); // sign extend
+    capaddr_t addr = cap->bounds.cursor + imm;
+
+    CAPSTONE_DEBUG_PRINT("Cap mem access addr = %lx, size = %lu\n", addr, (capaddr_t)size);
+
+    if(size == 16) {
+        // accessing capabilities in memory, extra checks needed
+        // check alignment
+        if(addr & 15) {
+            CAPSTONE_DEBUG_PRINT("Unaligned cap access\n");
+            riscv_raise_exception(env, RISCV_EXCP_LOAD_ADDR_MIS, GETPC());
+        }
+        // for load, we need to make sure it's a capability
+        if(!is_store && !cap_mem_map_query(&env->cm_map, addr)) {
+            CAPSTONE_DEBUG_PRINT("Attempting to load a non-capability as a capability\n");
+            riscv_raise_exception(env, RISCV_EXCP_LOAD_ACCESS_FAULT, GETPC());
+        }
+    }
+
+    // TODO: bounds check only for now
+    if(!cap_in_bounds(&cap->bounds, addr, (capaddr_t)size)) {
+        CAPSTONE_DEBUG_PRINT("Cap mem access OOB: addr = %lx, size = %lu\n", addr, (capaddr_t)size);
+        RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
+        riscv_raise_exception(env, excp, GETPC());
+    }
+
+    return addr;
+
+}
+
+uint64_t helper_load_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, uint32_t memop) {
+    return _helper_access_with_cap(env, rs1, imm, memop, false);
+}
+
+
+uint64_t helper_store_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, uint32_t memop) {
+    return _helper_access_with_cap(env, rs1, imm, memop, true);
+}
+
+void helper_reg_set_cap_compressed(CPURISCVState *env, uint32_t rd, uint64_t i64_lo, uint64_t i64_hi) {
+    // TODO: implement
+    assert(false);
+}
+
+
+void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capfat_t* cap = &rd_v->val.cap;
+    cap->bounds.base = rs1_v;
+    cap->bounds.end = rs2_v;
+    cap->bounds.cursor = rs1_v;
+    cap->async = 0;
+    cap->perms = CAP_PERMS_RWX;
+    cap->type = CAP_TYPE_NONLIN;
+    rd_v->tag = true;
+}
+
+void helper_csdebugoncapmem(CPURISCVState *env, uint64_t rs1_v) {
+    CAPSTONE_DEBUG_PRINT("rs1_v = %lu\n", rs1_v);
+    env->cap_mem = rs1_v != 0;
+}
+
+void helper_capstone_debugger(void) {
+    CAPSTONE_DEBUG_PRINT("DEBUGGER\n");
+}
+

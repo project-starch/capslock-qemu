@@ -31,6 +31,7 @@
 #include "qapi/qapi-types-common.h"
 #include "cpu-qom.h"
 #include "cap.h"
+#include "cap_mem_map.h"
 
 #define TCG_GUEST_DEFAULT_MO 0
 
@@ -137,6 +138,7 @@ struct CPUArchState {
     target_ulong vtype;
     bool vill;
 
+    capfat_t pc_cap; /* pc capability, the cursor is not used */
     target_ulong pc;
     target_ulong load_res;
     target_ulong load_val;
@@ -374,6 +376,10 @@ struct CPUArchState {
     // TODO: add these to the VM migration state
     capregval_t cmmu; /* capability for use with MMU-based memory accesses */
 
+    bool cap_mem; /* temporary: use capabilities for memory accesses */
+
+    cap_mem_map_t cm_map; /* maintains locations of capabilities in memory */
+
 #ifdef CONFIG_KVM
     /* kvm timer */
     bool kvm_timer_dirty;
@@ -515,6 +521,8 @@ FIELD(TB_FLAGS, ITRIGGER, 22, 1)
 FIELD(TB_FLAGS, VIRT_ENABLED, 23, 1)
 FIELD(TB_FLAGS, PRIV, 24, 2)
 FIELD(TB_FLAGS, AXL, 26, 2)
+/* Temporary: memory access use capabilities */
+FIELD(TB_FLAGS, CAP_MEM, 28, 1)
 
 #ifdef TARGET_RISCV32
 #define riscv_cpu_mxl(env)  ((void)(env), MXL_RV32)

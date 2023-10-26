@@ -38,6 +38,7 @@
 #include "kvm_riscv.h"
 #include "tcg/tcg.h"
 #include "cap.h"
+#include "cap_mem_map.h"
 
 /* RISC-V CPU definitions */
 static const char riscv_single_letter_exts[] = "IEMAFDQCPVH";
@@ -406,6 +407,13 @@ static void rv64_base_cpu_init(Object *obj)
     env->cmmu.val.cap.bounds.base = 0x0;
     env->cmmu.val.cap.bounds.end = 0x8000000000000ULL;
     env->cmmu.val.cap.perms = CAP_PERMS_RWX;
+
+    env->pc_cap.bounds.cursor = 0x0;
+    env->pc_cap.bounds.base = 0x0;
+    env->pc_cap.bounds.end = 0x8000000000000ULL;
+    env->pc_cap.perms = CAP_PERMS_RWX;
+
+    cap_mem_map_init(&env->cm_map);
 }
 
 static void rv64_sifive_u_cpu_init(Object *obj)

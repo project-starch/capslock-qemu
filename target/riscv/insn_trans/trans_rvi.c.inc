@@ -264,13 +264,38 @@ static bool gen_load_i128(DisasContext *ctx, arg_lb *a, MemOp memop)
     return true;
 }
 
+static bool gen_load_tl_with_cap(DisasContext *ctx, arg_lb *a, MemOp memop)
+{
+    // TODO: use helper for now for straightforward implementation
+    // can improve the performance later
+    TCGv addr = tcg_temp_new();
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    TCGv imm = tcg_constant_tl(a->imm);
+    TCGv dest = dest_gpr(ctx, a->rd);
+    TCGv_i32 memop_v = tcg_constant_i32((int)memop);
+
+    // TODO: memop also needs to be checked here
+    gen_helper_load_with_cap(addr, cpu_env, rs1, imm, memop_v);
+    tcg_gen_qemu_ld_tl(dest, addr, ctx->mem_idx, memop);
+    gen_set_gpr(ctx, a->rd, dest);
+    gen_helper_capstone_debugger(); // just to signal the end of the execution
+
+    return true;
+}
+
 static bool gen_load(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
+    // TODO: support capability-based addressing
     decode_save_opc(ctx);
-    if (get_xl(ctx) == MXL_RV128) {
-        return gen_load_i128(ctx, a, memop);
+    if (ctx->cap_mem && ctx->priv == PRV_U) {
+        // we need to use Capstone capabilities
+        return gen_load_tl_with_cap(ctx, a, memop);
     } else {
-        return gen_load_tl(ctx, a, memop);
+        if (get_xl(ctx) == MXL_RV128) {
+            return gen_load_i128(ctx, a, memop);
+        } else {
+            return gen_load_tl(ctx, a, memop);
+        }
     }
 }
 
@@ -352,13 +377,33 @@ static bool gen_store_i128(DisasContext *ctx, arg_sb *a, MemOp memop)
     return true;
 }
 
+static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
+{
+    TCGv addr = tcg_temp_new();
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    TCGv imm = tcg_constant_tl(a->imm);
+    TCGv data = get_gpr(ctx, a->rs2, EXT_NONE);
+    TCGv_i32 memop_v = tcg_constant_i32((int)memop);
+
+    gen_helper_store_with_cap(addr, cpu_env, rs1, imm, memop_v);
+    tcg_gen_qemu_st_tl(data, addr, ctx->mem_idx, memop);
+    gen_helper_capstone_debugger(); // just to signal the end of the execution
+
+    return true;
+}
+
 static bool gen_store(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
     decode_save_opc(ctx);
-    if (get_xl(ctx) == MXL_RV128) {
-        return gen_store_i128(ctx, a, memop);
+    if (ctx->cap_mem && ctx->priv == PRV_U) {
+        /* perform store using a capability */
+        return gen_store_tl_with_cap(ctx, a, memop);
     } else {
-        return gen_store_tl(ctx, a, memop);
+        if (get_xl(ctx) == MXL_RV128) {
+            return gen_store_i128(ctx, a, memop);
+        } else {
+            return gen_store_tl(ctx, a, memop);
+        }
     }
 }
 
