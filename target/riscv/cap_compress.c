@@ -39,7 +39,7 @@ DEF_OTHER_FIELD(revnode_id, 33, 63)
 void cap_compress(capfat_t *cap_fat, uint64_t *res_lo, uint64_t *res_hi) {
     uint64_t len = cap_fat->bounds.end - cap_fat->bounds.base;
     uint64_t leading_zeros;
-    for(leading_zeros = 1; leading_zeros > 12 && ((len >> leading_zeros) & 1) == 0; -- leading_zeros);
+    for(leading_zeros = 63; leading_zeros > 12 && ((len >> leading_zeros) & 1) == 0; -- leading_zeros);
     uint64_t E = leading_zeros - 12;
     uint64_t iE, B, T;
 
@@ -92,7 +92,7 @@ void cap_uncompress(uint64_t lo, uint64_t hi, capfat_t *out) {
         B |= bE_get(&cc);
         msb = false;
     }
-    carry_out = (T & 2047) < (B & 2047);
+    carry_out = (T & 4095) < (B & 4095);
     T |= (((B >> 12) + carry_out + msb) & 3) << 12;
     b = (cc.cursor & ~((1 << (E + 14)) - 1)) | (B << E);
     t = (cc.cursor & ~((1 << (E + 14)) - 1)) | (T << E);
