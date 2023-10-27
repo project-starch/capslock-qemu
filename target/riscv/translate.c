@@ -45,6 +45,7 @@ static TCGv load_val;
 /* globals for PM CSRs */
 static TCGv pm_mask;
 static TCGv pm_base;
+static TCGv cap_compress_result_lo, cap_compress_result_hi;
 
 /*
  * If an operation is being performed on less than TARGET_LONG_BITS,
@@ -1336,4 +1337,9 @@ void riscv_translate_init(void)
                                  "pmmask");
     pm_base = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, cur_pmbase),
                                  "pmbase");
+    
+    cap_compress_result_lo = tcg_global_mem_new(cpu_env,
+        offsetof(CPURISCVState, cap_compress_result_lo), "cap_compress_result_lo");
+    cap_compress_result_hi = tcg_global_mem_new(cpu_env,
+        offsetof(CPURISCVState, cap_compress_result_hi), "cap_compress_result_hi");
 }

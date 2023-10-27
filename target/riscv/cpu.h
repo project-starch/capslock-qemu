@@ -380,6 +380,8 @@ struct CPUArchState {
 
     cap_mem_map_t cm_map; /* maintains locations of capabilities in memory */
 
+    target_ulong cap_compress_result_lo, cap_compress_result_hi; /* low and high of capability compression */
+
 #ifdef CONFIG_KVM
     /* kvm timer */
     bool kvm_timer_dirty;

@@ -26,6 +26,7 @@
 #include "exec/helper-proto.h"
 #include "capstone_defs.h"
 #include "cap_mem_map.h"
+#include "cap_compress.h"
 #include <assert.h>
 
 /* Exceptions processing helpers */
@@ -865,12 +866,37 @@ uint64_t helper_store_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, u
 }
 
 void helper_reg_set_cap_compressed(CPURISCVState *env, uint32_t rd, uint64_t i64_lo, uint64_t i64_hi) {
-    // TODO: implement
-    assert(false);
+    CAPSTONE_DEBUG_PRINT("uncompressing capability to reg %u\n", rd);
+    capregval_t* rd_v = &env->gpr[rd];
+    cap_uncompress(i64_lo, i64_hi, &rd_v->val.cap);
+    rd_v->tag = true;
 }
 
+void helper_compress_cap(CPURISCVState *env, uint32_t reg) {
+    CAPSTONE_DEBUG_PRINT("compressing capability in reg %u\n", reg);
+    capregval_t* reg_v = &env->gpr[reg];
+    
+    if(!reg_v->tag) {
+        CAPSTONE_DEBUG_PRINT("attempting to compress non-capability %lx\n", reg_v->val.scalar);
+        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+    }
+
+    cap_compress(&reg_v->val.cap, &env->cap_compress_result_lo, &env->cap_compress_result_hi);
+}
+
+/* set tag bit for address */
+void helper_set_cap_mem_map(CPURISCVState *env, uint64_t addr) {
+    cap_mem_map_add(&env->cm_map, addr);
+}
+
+void helper_remove_cap_mem_map(CPURISCVState *env, uint64_t addr, uint32_t memop) {
+    cap_mem_map_remove_range(&env->cm_map, addr, memop_size((MemOp)memop));
+}
+
+/* helpers for Capstone debug instructions */
 
 void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
+    CAPSTONE_DEBUG_PRINT("Generating cap with (0x%lx, 0x%lx)\n", rs1_v, rs2_v);
     capregval_t* rd_v = &env->gpr[rd];
     capfat_t* cap = &rd_v->val.cap;
     cap->bounds.base = rs1_v;
@@ -885,6 +911,23 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
 void helper_csdebugoncapmem(CPURISCVState *env, uint64_t rs1_v) {
     CAPSTONE_DEBUG_PRINT("rs1_v = %lu\n", rs1_v);
     env->cap_mem = rs1_v != 0;
+}
+
+void helper_csdebugclearcmmap(CPURISCVState *env) {
+    cap_mem_map_clear(&env->cm_map);
+}
+
+void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
+    capregval_t* rs1_v = &env->gpr[rs1];
+    if(rs1_v->tag) {
+        // only printing the bounds for now
+        CAPSTONE_DEBUG_PRINT("Print = Cap(0x%lx, 0x%lx, 0x%lx)\n",
+                            rs1_v->val.cap.bounds.cursor,
+                            rs1_v->val.cap.bounds.base,
+                            rs1_v->val.cap.bounds.end);
+    } else {
+        CAPSTONE_DEBUG_PRINT("Print = Scalar(0x%lx)\n", rs1_v->val.scalar);
+    }
 }
 
 void helper_capstone_debugger(void) {

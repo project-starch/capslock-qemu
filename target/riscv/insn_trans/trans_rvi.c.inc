@@ -352,8 +352,10 @@ static bool gen_store_tl(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
     TCGv addr = get_address(ctx, a->rs1, a->imm);
     TCGv data = get_gpr(ctx, a->rs2, EXT_NONE);
+    TCGv_i32 memop_v = tcg_constant_i32(memop);
 
     tcg_gen_qemu_st_tl(data, addr, ctx->mem_idx, memop);
+    gen_helper_remove_cap_mem_map(cpu_env, addr, memop_v);
     return true;
 }
 
@@ -387,6 +389,7 @@ static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
 
     gen_helper_store_with_cap(addr, cpu_env, rs1, imm, memop_v);
     tcg_gen_qemu_st_tl(data, addr, ctx->mem_idx, memop);
+    gen_helper_remove_cap_mem_map(cpu_env, addr, memop_v);
     gen_helper_capstone_debugger(); // just to signal the end of the execution
 
     return true;

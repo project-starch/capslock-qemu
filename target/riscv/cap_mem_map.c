@@ -76,6 +76,14 @@ void cap_mem_map_remove(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
     }
 }
 
+void cap_mem_map_remove_range(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, unsigned size) {
+    cap_mem_map_addr_t start_addr = addr_round_down(addr);
+    cap_mem_map_addr_t end_addr = addr_round_down(addr + size - 1);
+    for(; start_addr <= end_addr; start_addr += 16) {
+        cap_mem_map_remove(cm_map, start_addr);
+    }
+}
+
 bool cap_mem_map_query(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
     if(addr_is_aligned(addr)) {
         struct CapMemMapEntry *entry = find_entry(cm_map, addr);

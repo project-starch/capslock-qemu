@@ -24,6 +24,7 @@ typedef struct CapMemMap cap_mem_map_t;
 
 void cap_mem_map_add(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr);
 void cap_mem_map_remove(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr);
+void cap_mem_map_remove_range(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, unsigned size);
 bool cap_mem_map_query(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr);
 void cap_mem_map_clear(cap_mem_map_t *cm_map);
 void cap_mem_map_init(cap_mem_map_t *cm_map);

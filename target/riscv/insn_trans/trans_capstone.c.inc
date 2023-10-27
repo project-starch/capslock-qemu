@@ -93,25 +93,6 @@ static bool trans_csccsrrw(DisasContext *ctx, arg_csccsrrw *a) {
     return true;
 }
 
-static bool trans_csdebuggencap(DisasContext *ctx, arg_csdebuggencap *a) {
-    TCGv_i32 rd = tcg_constant_i32(a->rd);
-    TCGv rs1_v = get_gpr(ctx, a->rs1, EXT_NONE);
-    TCGv rs2_v = get_gpr(ctx, a->rs2, EXT_NONE);
-
-    gen_helper_csdebuggencap(cpu_env, rd, rs1_v, rs2_v);
-    return true;
-}
-
-static bool trans_csdebugoncapmem(DisasContext *ctx, arg_csdebugoncapmem *a) {
-    TCGv rs1_v = get_gpr(ctx, a->rs1, EXT_NONE);
-    gen_helper_csdebugoncapmem(cpu_env, rs1_v);
-    decode_save_opc(ctx);
-    gen_update_pc(ctx, ctx->cur_insn_len);
-    exit_tb(ctx);
-    ctx->base.is_jmp = DISAS_NORETURN;
-    return true;
-}
-
 static bool trans_csldc(DisasContext *ctx, arg_csldc *a) {
     /* Can only be used in cap-mem mode */
     if (ctx->cap_mem && ctx->priv == PRV_U) {
@@ -139,7 +120,55 @@ static bool trans_csldc(DisasContext *ctx, arg_csldc *a) {
 
 
 static bool trans_csstc(DisasContext *ctx, arg_csstc *a) {
-    // TODO: implement
-    assert(false);
+    if (ctx->cap_mem && ctx->priv == PRV_U) {
+        TCGv addr = tcg_temp_new();
+        TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+        TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
+        TCGv imm = tcg_constant_tl(a->imm);
+        TCGv_i32 memop_v = tcg_constant_i32((int)MO_TEUO);
+
+        gen_helper_compress_cap(cpu_env, rs2);
+        gen_helper_store_with_cap(addr, cpu_env, rs1, imm, memop_v);
+
+        gen_helper_set_cap_mem_map(cpu_env, addr);
+
+        tcg_gen_qemu_st_tl(cap_compress_result_lo, addr, ctx->mem_idx, MO_TEUQ);
+        tcg_gen_addi_tl(addr, addr, 8);
+        tcg_gen_qemu_st_tl(cap_compress_result_hi, addr, ctx->mem_idx, MO_TEUQ);
+    } else {
+        gen_exception_illegal(ctx);
+    }
+    return true;
+}
+
+/* Capstone debug instructions */
+
+static bool trans_csdebuggencap(DisasContext *ctx, arg_csdebuggencap *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv rs1_v = get_gpr(ctx, a->rs1, EXT_NONE);
+    TCGv rs2_v = get_gpr(ctx, a->rs2, EXT_NONE);
+
+    gen_helper_csdebuggencap(cpu_env, rd, rs1_v, rs2_v);
+    return true;
+}
+
+static bool trans_csdebugoncapmem(DisasContext *ctx, arg_csdebugoncapmem *a) {
+    TCGv rs1_v = get_gpr(ctx, a->rs1, EXT_NONE);
+    gen_helper_csdebugoncapmem(cpu_env, rs1_v);
+    decode_save_opc(ctx);
+    gen_update_pc(ctx, ctx->cur_insn_len);
+    exit_tb(ctx);
+    ctx->base.is_jmp = DISAS_NORETURN;
+    return true;
+}
+
+static bool trans_csdebugclearcmmap(DisasContext *ctx, arg_csdebugclearcmmap *a) {
+    gen_helper_csdebugclearcmmap(cpu_env);
+    return true;
+}
+
+static bool trans_csdebugprint(DisasContext *ctx, arg_csdebugprint *a) {
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    gen_helper_csdebugprint(cpu_env, rs1);
     return true;
 }

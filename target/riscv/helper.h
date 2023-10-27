@@ -1202,7 +1202,13 @@ DEF_HELPER_4(load_with_cap, tl, env, i32, tl, i32)
 DEF_HELPER_4(store_with_cap, tl, env, i32, tl, i32)
 DEF_HELPER_4(reg_set_cap_compressed, void, env, i32, tl, tl)
 
+DEF_HELPER_2(compress_cap, void, env, i32)
+DEF_HELPER_2(set_cap_mem_map, void, env, tl)
+DEF_HELPER_3(remove_cap_mem_map, void, env, tl, i32)
+
 /* Helpers for debug instructions */
 DEF_HELPER_4(csdebuggencap, void, env, i32, tl, tl)
 DEF_HELPER_2(csdebugoncapmem, void, env, tl)
+DEF_HELPER_1(csdebugclearcmmap, void, env)
+DEF_HELPER_2(csdebugprint, void, env, i32)
 DEF_HELPER_0(capstone_debugger, void)
