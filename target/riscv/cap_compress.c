@@ -58,7 +58,7 @@ void cap_compress(capfat_t *cap_fat, uint64_t *res_lo, uint64_t *res_hi) {
         T |= (E >> 3) & 7;
     }
 
-    cap_compressed_t cc;
+    cap_compressed_t cc = {0};
     cc.cursor = cap_fat->bounds.cursor;
     bE_set(&cc, B & 7);
     b_set(&cc, (B >> 3) & ((1 << 11) - 1));

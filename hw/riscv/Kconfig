@@ -85,3 +85,6 @@ config SPIKE
     select HTIF
     select RISCV_ACLINT
     select SIFIVE_PLIC
+
+config CAPSTONE_VIRT
+    bool

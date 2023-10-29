@@ -1794,7 +1794,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
 bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessType access_type) {
     CPURISCVState* env = cs->env_ptr;
-    capperms_t access;
+    capperms_t access = CAP_PERMS_NA;
     switch(access_type) {
         case MMU_DATA_LOAD:
         case MMU_CAP_DATA_LOAD:
