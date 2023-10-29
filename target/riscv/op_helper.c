@@ -893,6 +893,39 @@ void helper_remove_cap_mem_map(CPURISCVState *env, uint64_t addr, uint32_t memop
     cap_mem_map_remove_range(&env->cm_map, addr, memop_size((MemOp)memop));
 }
 
+/* helpers for Capstone control transfer instructions */
+
+void helper_cjalr_switch_caps(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t succ_pc) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+
+    // rd <- pc <- rs1
+    capfat_t pc_cap_v = env->pc_cap;
+    if(!rs1_v->tag) {
+        CAPSTONE_DEBUG_PRINT("cs.cjalr requires capability in rs1\n");
+        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+    }
+
+    env->pc_cap = rs1_v->val.cap;
+
+    pc_cap_v.bounds.cursor = succ_pc;
+    rd_v->val.cap = pc_cap_v;
+    rd_v->tag = true;
+}
+
+/* Write the content of the specified register into PC reg */
+/* This does not touch PC itself */
+void helper_set_pc_cap(CPURISCVState *env, uint32_t reg) {
+    capregval_t* v = &env->gpr[reg];
+    
+    if(!v->tag) {
+        CAPSTONE_DEBUG_PRINT("PC cap must be a capability\n");
+        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+    }
+
+    env->pc_cap = v->val.cap;
+}
+
 /* helpers for Capstone debug instructions */
 
 void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
