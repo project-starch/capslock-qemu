@@ -794,7 +794,7 @@ void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     }
 
     *rd_v = *rs1_v;
-    rd_v->val.cap.type = CAP_TYPE_LIN;
+    rd_v->val.cap.type = CAP_TYPE_SEALED;
     rd_v->val.cap.async = CAP_ASYNC_SYNC;
 
     if(rd != rs1) {
@@ -805,37 +805,44 @@ void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
 void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccsr_id) {
     capregval_t* rd_v = &env->gpr[rd];
     capregval_t* rs1_v = &env->gpr[rs1];
+    capregval_t* ccsr = NULL;
     capregval_t tmp;
 
     CPUState* cpu = env_cpu(env);
 
     assert(rs1_v->tag);
 
-    switch(ccsr_id) {
-        case 0x0:
+    switch((capstone_ccsr_id_t)ccsr_id) {
+        case CAPSTONE_CCSR_CEH:
             // TODO: ceh
+            ccsr = &env->ceh;
             break;
-        case 0x1:
-            // TODO: cih
+        case CAPSTONE_CCSR_CIH:
+            assert(!env->cih.tag); /* only writable when originally not a capability */
+            ccsr = &env->cih;
             break;
-        case 0x2:
-            // TODO: cinit
+        case CAPSTONE_CCSR_CINIT:
+            ccsr = &env->cinit;
             break;
-        case 0x3:
-            // TODO: epc
+        case CAPSTONE_CCSR_EPC:
+            ccsr = &env->epc;
             break;
-        case 0x4:
-            // cmmu
-            tmp = env->cmmu;
-            env->cmmu = *rs1_v;
-            if(!captype_is_copyable(rs1_v->val.cap.type)) {
-                *rs1_v = CAPREGVAL_NULL;
-            }
-            *rd_v = tmp;
-            tlb_flush(cpu);
+        case CAPSTONE_CCSR_CMMU:
+            ccsr = &env->cmmu;
             break;
         default:
             assert(false); // not a valid CCSR
+    }
+    
+    tmp = *ccsr;
+    *ccsr = *rs1_v;
+    if(!captype_is_copyable(rs1_v->val.cap.type)) {
+        *rs1_v = CAPREGVAL_NULL;
+    }
+    *rd_v = tmp;
+
+    if((capstone_ccsr_id_t)ccsr_id == CAPSTONE_CCSR_CMMU) {
+        tlb_flush(cpu);
     }
 }
 
@@ -966,7 +973,7 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
     cap->bounds.cursor = rs1_v;
     cap->async = 0;
     cap->perms = CAP_PERMS_RWX;
-    cap->type = CAP_TYPE_NONLIN;
+    cap->type = CAP_TYPE_LIN;
     rd_v->tag = true;
 }
 

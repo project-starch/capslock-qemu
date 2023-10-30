@@ -31,6 +31,7 @@
 #include "sysemu/cpu-timers.h"
 #include "cpu_bits.h"
 #include "cap.h"
+#include "cap_compress.h"
 #include "debug.h"
 #include "tcg/oversized-guest.h"
 #include "capstone_defs.h"
@@ -1585,6 +1586,60 @@ static target_ulong riscv_transformed_insn(CPURISCVState *env,
 }
 #endif /* !CONFIG_USER_ONLY */
 
+static inline bool capstone_int_can_take(CPURISCVState *env) {
+    return env->cih.tag && env->cih.val.cap.type == CAP_TYPE_SEALED &&
+        env->cih.val.cap.async == CAP_ASYNC_SYNC;
+}
+
+static void store_cap(AddressSpace *as, CPURISCVState *env, hwaddr addr, capfat_t *cap) {
+    MemTxResult res;
+    MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
+    uint64_t lo, hi;
+    cap_compress(cap, &lo, &hi);
+    address_space_stq(as, addr, lo, attrs, &res);
+    address_space_stq(as, addr + 8, hi, attrs, &res);
+    cap_mem_map_add(&env->cm_map, addr);
+}
+
+static void load_capregval(AddressSpace *as, CPURISCVState *env, hwaddr addr, capregval_t *v) {
+    MemTxResult res;
+    MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
+    uint64_t lo, hi;
+    if(cap_mem_map_query(&env->cm_map, addr)) {
+        lo = address_space_ldq(as, addr, attrs, &res);
+        hi = address_space_ldq(as, addr + 8, attrs, &res);
+        v->tag = true;
+        cap_uncompress(lo, hi, &v->val.cap);
+    } else {
+        v->tag = false;
+        v->val.scalar = address_space_ldq(as, addr, attrs, &res);
+    }
+}
+
+static void store_capregval(AddressSpace *as, CPURISCVState *env, hwaddr addr, capregval_t *v) {
+    MemTxResult res;
+    MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
+    uint64_t lo, hi;
+    assert(!(addr & 15)); // must be aligned
+    if(v->tag) {
+        cap_compress(&v->val.cap, &lo, &hi);
+        address_space_stq(as, addr, lo, attrs, &res);
+        address_space_stq(as, addr + 8, hi, attrs, &res);
+        cap_mem_map_add(&env->cm_map, addr);
+    } else {
+        address_space_stq(as, addr, v->val.scalar, attrs, &res);
+        cap_mem_map_remove(&env->cm_map, addr);
+    }
+}
+
+static inline void swap_capregval(AddressSpace *as, CPURISCVState *env, hwaddr addr, capregval_t *v) {
+    capregval_t loaded_v;
+    load_capregval(as, env, addr, &loaded_v);
+    store_capregval(as, env, addr, v);
+    *v = loaded_v;
+}
+
+
 /*
  * Handle Traps
  *
@@ -1697,7 +1752,44 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                   __func__, env->mhartid, async, cause, env->pc, tval,
                   riscv_cpu_get_trap_name(cause, async));
 
-    if (env->priv <= PRV_S &&
+    if (async && env->cap_mem) {
+        /* handle interrupt in C-mode */
+        // need to look at cih
+        if(capstone_int_can_take(env)) {
+            // can deliver the exception
+            // TODO: need to save more state for S/U modes
+
+            capaddr_t base_addr = env->cih.val.cap.bounds.base;
+
+            // swap pc cap
+            capregval_t loaded_regval;
+            load_capregval(cs->as, env, base_addr, &loaded_regval);
+            env->pc_cap.bounds.cursor = env->pc;
+            store_cap(cs->as, env, base_addr, &env->pc_cap);
+            assert(loaded_regval.tag);
+            env->pc_cap = loaded_regval.val.cap;
+            env->pc = env->pc_cap.bounds.cursor;
+
+            // swap ceh
+            swap_capregval(cs->as, env, base_addr + 16, &env->ceh);
+
+            // swap the GPRs
+            int i;
+            for(i = 1; i < 32; i ++) {
+                swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
+            }
+
+            loaded_regval = env->cih;
+            loaded_regval.val.cap.type = CAP_TYPE_SEALEDRET;
+            loaded_regval.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;
+            loaded_regval.val.cap.reg = 0;
+            loaded_regval.val.cap.async = CAP_ASYNC_INT;
+
+            env->gpr[1] = loaded_regval;
+            env->cih = CAPREGVAL_NULL; // disabling further interrupts
+            riscv_cpu_set_mode(env, PRV_C);
+        }
+    } else if (env->priv <= PRV_S &&
             cause < TARGET_LONG_BITS && ((deleg >> cause) & 1)) {
         /* handle the trap in S-mode */
         if (riscv_has_ext(env, RVH)) {
@@ -1774,7 +1866,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         env->mtval2 = mtval2;
         env->mtinst = tinst;
         env->pc = (env->mtvec >> 2 << 2) +
-                  ((async && (env->mtvec & 3) == 1) ? cause * 4 : 0);
+                ((async && (env->mtvec & 3) == 1) ? cause * 4 : 0);
         riscv_cpu_set_mode(env, PRV_M);
     }
 

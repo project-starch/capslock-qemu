@@ -374,6 +374,10 @@ struct CPUArchState {
 
     /* CSRs for Capstone */
     // TODO: add these to the VM migration state
+    capregval_t ceh; /* sealed capability for exception handler */
+    capregval_t cih; /* sealed capability for interrupt handler */
+    capregval_t cinit; /* initial capability */
+    capregval_t epc; /* excepting PC capability */
     capregval_t cmmu; /* capability for use with MMU-based memory accesses */
 
     bool cap_mem; /* temporary: use capabilities for memory accesses */
