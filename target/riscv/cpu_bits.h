@@ -686,7 +686,7 @@ typedef enum RISCVException {
     /* Capstone-specific exceptions */
     RISCV_EXCP_UNEXP_OP_TYPE = 0x18,
     RISCV_EXCP_INVALID_CAP = 0x19,
-    RISCV_EXCP_UNEXP_CAP_TPYE = 0x1a,
+    RISCV_EXCP_UNEXP_CAP_TYPE = 0x1a,
     RISCV_EXCP_INSUF_CAP_PERMS = 0x1b,
     RISCV_EXCP_CAP_OOB = 0x1c,
     RISCV_EXCP_ILLEGAL_OP_VAL = 0x1d,

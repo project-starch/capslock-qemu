@@ -770,7 +770,36 @@ void helper_csinit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) 
 }
 
 void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
-    assert(false); // FIXME: unimplemented
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+
+    if(!rs1_v->tag) {
+        CAPSTONE_DEBUG_PRINT("Sealing requires a capability\n");
+        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+    }
+
+    if(rs1_v->val.cap.type != CAP_TYPE_LIN) {
+        CAPSTONE_DEBUG_PRINT("Sealing requires a linear capability\n");
+        riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, GETPC());
+    }
+
+    if(!cap_perms_allow(rs1_v->val.cap.perms, CAP_PERMS_RW)) {
+        CAPSTONE_DEBUG_PRINT("Sealing requires a RW capability\n");
+        riscv_raise_exception(env, RISCV_EXCP_INSUF_CAP_PERMS, GETPC());
+    }
+
+    if(cap_size(&rs1_v->val.cap.bounds) < CAP_SEALED_SIZE_MIN ||
+       !cap_aligned(&rs1_v->val.cap.bounds, 4)) {
+        CAPSTONE_DEBUG_PRINT("Sealing requires an aligned region of sufficient size\n");
+    }
+
+    *rd_v = *rs1_v;
+    rd_v->val.cap.type = CAP_TYPE_LIN;
+    rd_v->val.cap.async = CAP_ASYNC_SYNC;
+
+    if(rd != rs1) {
+        *rs1_v = CAPREGVAL_NULL;
+    }
 }
 
 void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccsr_id) {

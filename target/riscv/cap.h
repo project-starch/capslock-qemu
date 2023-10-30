@@ -28,6 +28,8 @@ enum CapType {
     CAP_TYPE_SEALEDRET  = 0x5
 };
 
+#define CAP_SEALED_SIZE_MIN (16 * 33)
+
 typedef enum CapType captype_t;
 
 enum CapAsync {
@@ -71,6 +73,14 @@ struct CapRegVal {
 typedef struct CapRegVal capregval_t;
 
 static const capregval_t CAPREGVAL_NULL = {0};
+
+static inline capaddr_t cap_size(capboundsfat_t* bounds) {
+    return bounds->end - bounds->base;
+}
+
+static inline bool cap_aligned(capboundsfat_t* bounds, unsigned align) {
+    return ((bounds->base >> align) << align) == bounds->base;
+}
 
 static inline bool cap_perms_allow(capperms_t perms, capperms_t access) {
     return (access & perms) == access;
