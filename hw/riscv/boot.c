@@ -472,3 +472,5 @@ void riscv_setup_firmware_boot(MachineState *machine)
         }
     }
 }
+
+#include "boot_capstone.c.inc"

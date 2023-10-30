@@ -1,0 +1,4 @@
+/resetvec
+*.bin
+*.elf
+localconf.sh

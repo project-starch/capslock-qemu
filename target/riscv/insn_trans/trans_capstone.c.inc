@@ -95,7 +95,7 @@ static bool trans_csccsrrw(DisasContext *ctx, arg_csccsrrw *a) {
 
 static bool trans_csldc(DisasContext *ctx, arg_csldc *a) {
     /* Can only be used in cap-mem mode */
-    if (ctx->cap_mem && ctx->priv == PRV_U) {
+    if (disas_context_in_c_mode(ctx)) {
         TCGv addr = tcg_temp_new();
         TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
         TCGv_i32 rd = tcg_constant_i32(a->rd);
@@ -120,7 +120,7 @@ static bool trans_csldc(DisasContext *ctx, arg_csldc *a) {
 
 
 static bool trans_csstc(DisasContext *ctx, arg_csstc *a) {
-    if (ctx->cap_mem && ctx->priv == PRV_U) {
+    if (disas_context_in_c_mode(ctx)) {
         TCGv addr = tcg_temp_new();
         TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
         TCGv_i32 rs2 = tcg_constant_i32(a->rs2);

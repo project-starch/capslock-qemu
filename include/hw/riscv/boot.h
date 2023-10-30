@@ -63,4 +63,6 @@ void riscv_rom_copy_firmware_info(MachineState *machine, hwaddr rom_base,
 void riscv_setup_direct_kernel(hwaddr kernel_addr, hwaddr fdt_addr);
 void riscv_setup_firmware_boot(MachineState *machine);
 
+#include "boot_capstone.h.inc"
+
 #endif /* RISCV_BOOT_H */

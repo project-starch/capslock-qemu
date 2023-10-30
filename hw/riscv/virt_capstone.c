@@ -1313,6 +1313,11 @@ static void capstone_virt_machine_done(Notifier *notifier, void *data)
     riscv_load_fdt(fdt_load_addr, machine->fdt);
 
     /* load the reset vector */
+    // capstone_setup_rom_reset_vec(machine, &s->soc[0], start_addr,
+    //                           virt_memmap[VIRT_MROM].base,
+    //                           virt_memmap[VIRT_MROM].size, kernel_entry,
+    //                           fdt_load_addr);
+    
     riscv_setup_rom_reset_vec(machine, &s->soc[0], start_addr,
                               virt_memmap[VIRT_MROM].base,
                               virt_memmap[VIRT_MROM].size, kernel_entry,

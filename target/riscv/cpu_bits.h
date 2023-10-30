@@ -613,6 +613,7 @@ typedef enum {
 #define PRV_S 1
 #define PRV_RESERVED 2
 #define PRV_M 3
+#define PRV_C PRV_M
 
 /* RV32 satp CSR field masks */
 #define SATP32_MODE         0x80000000

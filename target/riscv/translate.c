@@ -120,6 +120,13 @@ typedef struct DisasContext {
     bool cap_mem;
 } DisasContext;
 
+
+static inline bool disas_context_in_c_mode(DisasContext *ctx) {
+    return ctx->priv == PRV_C && ctx->cap_mem;
+}
+
+
+
 static inline bool has_ext(DisasContext *ctx, uint32_t ext)
 {
     return ctx->misa_ext & ext;
