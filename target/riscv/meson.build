@@ -24,6 +24,7 @@ riscv_ss.add(files(
   'cap.c',
   'cap_mem_map.c',
   'cap_compress.c',
+  'capstone_helper.c',
 ))
 riscv_ss.add(when: 'CONFIG_KVM', if_true: files('kvm.c'), if_false: files('kvm-stub.c'))
 

@@ -187,6 +187,24 @@ static bool trans_cscbnz(DisasContext *ctx, arg_cscbnz *a) {
     return true;
 }
 
+static bool trans_cscall(DisasContext *ctx, arg_cscall *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+
+    gen_helper_cscall(cpu_env, rd, rs1);
+
+    return true;
+}
+
+static bool trans_csreturn(DisasContext *ctx, arg_csreturn *a) {
+    TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+
+    gen_helper_csreturn(cpu_env, rs1, rs2);
+
+    return true;
+}
+
 /* Capstone debug instructions */
 
 static bool trans_csdebuggencap(DisasContext *ctx, arg_csdebuggencap *a) {

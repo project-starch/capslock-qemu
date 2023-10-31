@@ -37,6 +37,8 @@
 #include "exec/helper-info.c.inc"
 #undef  HELPER_H
 
+#include "capstone_helper.h"
+
 /* global register indices */
 static TCGv cpu_gpr[32], cpu_gprh[32], cpu_pc, cpu_vl, cpu_vstart;
 static TCGv_i64 cpu_fpr[32]; /* assume F and D extensions */

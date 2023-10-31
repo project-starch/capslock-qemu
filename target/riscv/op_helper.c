@@ -18,6 +18,7 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include "qemu/osdep.h"
 #include "cpu.h"
 #include "internals.h"
@@ -27,7 +28,7 @@
 #include "capstone_defs.h"
 #include "cap_mem_map.h"
 #include "cap_compress.h"
-#include <assert.h>
+#include "capstone_helper.h"
 
 /* Exceptions processing helpers */
 G_NORETURN void riscv_raise_exception(CPURISCVState *env,
@@ -960,6 +961,156 @@ void helper_set_pc_cap(CPURISCVState *env, uint32_t reg) {
     }
 
     env->pc_cap = v->val.cap;
+}
+
+
+void helper_cscall(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+    CPUState *cs = env_cpu(env);
+    capregval_t* rs1_v = &env->gpr[rs1];
+    
+    if(!rs1_v->tag) {
+        CAPSTONE_DEBUG_PRINT("Call requires a capability\n");
+        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+    }
+
+    if(rs1_v->val.cap.type != CAP_TYPE_SEALED ||
+       rs1_v->val.cap.async != CAP_ASYNC_SYNC) {
+        CAPSTONE_DEBUG_PRINT("Call requires a sealel sync capability\n");
+        riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, GETPC());
+    }
+
+    capfat_t rs1_val = rs1_v->val.cap;
+    capaddr_t base_addr = rs1_val.bounds.base;
+
+    // swap PC
+    capregval_t loaded_val;
+    load_capregval(cs->as, env, base_addr, &loaded_val);
+    assert(loaded_val.tag);
+    env->pc_cap.bounds.cursor = env->pc;
+    store_cap(cs->as, env, base_addr, &env->pc_cap);
+    env->pc_cap = loaded_val.val.cap;
+    env->pc = loaded_val.val.cap.bounds.cursor;
+
+    // swap ceh
+    swap_capregval(cs->as, env, base_addr + 16, &env->ceh);
+
+    // swap csp
+    swap_capregval(cs->as, env, base_addr + 16 * 2, &env->gpr[2]);
+
+    // set cra
+    rs1_val.type = CAP_TYPE_SEALEDRET;
+    rs1_val.bounds.cursor = rs1_val.bounds.base;
+    rs1_val.async = CAP_ASYNC_SYNC;
+    rs1_val.reg = rd;
+    capregval_set_cap(&env->gpr[1], &rs1_val);
+}
+
+void helper_csreturn(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
+    CPUState *cs = env_cpu(env);
+    capregval_t* rs1_v = &env->gpr[rs1];
+    capregval_t* rs2_v = &env->gpr[rs2];
+
+    if(rs1 == 0) {
+        if(rs2_v->tag) {
+            CAPSTONE_DEBUG_PRINT("Return requires an integer as rs2\n");
+            riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+        }
+
+        env->pc_cap.bounds.cursor = rs2_v->val.scalar;
+        capregval_set_cap(&env->ceh, &env->pc_cap);
+        cap_set_capregval(&env->pc_cap, &env->epc);
+        env->pc = env->pc_cap.bounds.cursor;
+        if(env->pc_cap.type != CAP_TYPE_NONLIN) {
+            env->epc = CAPREGVAL_NULL;
+        }
+    } else {
+        if(!rs1_v->tag || rs2_v->tag) {
+            CAPSTONE_DEBUG_PRINT("Return requires a capability and an integer\n");
+            riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+        }
+
+        if(rs1_v->val.cap.type != CAP_TYPE_SEALEDRET) {
+            CAPSTONE_DEBUG_PRINT("Return requires a sealed-return capability\n");
+            riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, GETPC());
+        }
+
+        capfat_t rs1_cap = rs1_v->val.cap;
+        capregval_t loaded_val;
+        capaddr_t base_addr = rs1_cap.bounds.base;
+        int i;
+
+        switch(rs1_cap.async) {
+            case CAP_ASYNC_SYNC:
+                *rs1_v = CAPREGVAL_NULL;
+                
+                // swap PC
+                env->pc_cap.bounds.cursor = rs2_v->val.scalar;
+                load_capregval(cs->as, env, base_addr, &loaded_val);
+                store_cap(cs->as, env, base_addr, &env->pc_cap);
+                cap_set_capregval(&env->pc_cap, &loaded_val);
+                env->pc = env->pc_cap.bounds.cursor;
+
+                // swap ceh
+                swap_capregval(cs->as, env, base_addr + 16, &env->ceh);
+
+                // swap csp
+                swap_capregval(cs->as, env, base_addr + 16 * 2, &env->gpr[2]);
+
+                // write return reg
+                capregval_set_cap(&env->gpr[rs1_cap.reg], &rs1_cap);
+                env->gpr[rs1_cap.reg].val.cap.type = CAP_TYPE_SEALED;
+
+                break;
+            case CAP_ASYNC_ECPT:
+                // swap PC
+                env->pc_cap.bounds.cursor = rs2_v->val.scalar;
+                load_capregval(cs->as, env, base_addr, &loaded_val);
+                store_cap(cs->as, env, base_addr, &env->pc_cap);
+                cap_set_capregval(&env->pc_cap, &loaded_val);
+                env->pc = env->pc_cap.bounds.cursor;
+
+                // store ceh
+                store_capregval(cs->as, env, base_addr + 16, &env->ceh);
+
+                rs1_cap.type = CAP_TYPE_SEALED;
+                rs1_cap.async = CAP_ASYNC_SYNC;
+                capregval_set_cap(&env->ceh, &rs1_cap);
+
+                *rs1_v = CAPREGVAL_NULL;
+
+                // swap GPRs
+                for(i = 1; i < 32; i ++) {
+                    swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
+                }
+
+                break;
+            case CAP_ASYNC_INT:
+                // swap PC
+                env->pc_cap.bounds.cursor = rs2_v->val.scalar;
+                load_capregval(cs->as, env, base_addr, &loaded_val);
+                store_cap(cs->as, env, base_addr, &env->pc_cap);
+                cap_set_capregval(&env->pc_cap, &loaded_val);
+                env->pc = env->pc_cap.bounds.cursor;
+
+                // swap ceh
+                swap_capregval(cs->as, env, base_addr + 16, &env->ceh);
+
+                rs1_cap.type = CAP_TYPE_SEALED;
+                rs1_cap.async = CAP_ASYNC_SYNC;
+                capregval_set_cap(&env->cih, &rs1_cap);
+
+                *rs1_v = CAPREGVAL_NULL;
+                
+                // swap GPRs
+                for(i = 1; i < 32; i ++) {
+                    swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
+                }
+
+                break;
+            default:
+                assert(false);
+        }
+    }
 }
 
 /* helpers for Capstone debug instructions */

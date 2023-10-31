@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 
 typedef uint64_t capaddr_t;
 
@@ -103,6 +104,16 @@ static inline bool captype_is_copyable(captype_t ty) {
 static inline void capregval_set_scalar(capregval_t* capreg, capaddr_t v) {
     capreg->tag = false;
     capreg->val.scalar = v;
+}
+
+static inline void capregval_set_cap(capregval_t* capreg, capfat_t* cap) {
+    capreg->tag = true;
+    capreg->val.cap = *cap;
+}
+
+static inline void cap_set_capregval(capfat_t* cap, capregval_t* capreg) {
+    assert(capreg->tag);
+    *cap = capreg->val.cap;
 }
 
 #endif
