@@ -33,6 +33,17 @@ enum CapType {
 
 typedef enum CapType captype_t;
 
+typedef uint16_t captype_mask_t;
+
+#define DEF_CAP_TYPE_MASK(name) static const captype_mask_t CAP_TYPE_MASK_ ## name = 1 << (CAP_TYPE_ ## name);
+DEF_CAP_TYPE_MASK(LIN)
+DEF_CAP_TYPE_MASK(NONLIN)
+DEF_CAP_TYPE_MASK(REV)
+DEF_CAP_TYPE_MASK(UNINIT)
+DEF_CAP_TYPE_MASK(SEALED)
+DEF_CAP_TYPE_MASK(SEALEDRET)
+#undef DEF_CAP_TYPE_MASK
+
 enum CapAsync {
     CAP_ASYNC_SYNC      = 0x0,
     CAP_ASYNC_ECPT      = 0x1,
@@ -114,6 +125,10 @@ static inline void capregval_set_cap(capregval_t* capreg, capfat_t* cap) {
 static inline void cap_set_capregval(capfat_t* cap, capregval_t* capreg) {
     assert(capreg->tag);
     *cap = capreg->val.cap;
+}
+
+static inline bool cap_type_in_mask(capfat_t* cap, captype_mask_t mask) {
+    return ((mask >> cap->type) & 1) != 0;
 }
 
 #endif
