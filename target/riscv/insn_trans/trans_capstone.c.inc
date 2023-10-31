@@ -191,7 +191,9 @@ static bool trans_cscall(DisasContext *ctx, arg_cscall *a) {
     TCGv_i32 rd = tcg_constant_i32(a->rd);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
 
+    gen_update_pc(ctx, ctx->cur_insn_len);
     gen_helper_cscall(cpu_env, rd, rs1);
+    lookup_and_goto_ptr(ctx);
 
     return true;
 }
@@ -200,7 +202,9 @@ static bool trans_csreturn(DisasContext *ctx, arg_csreturn *a) {
     TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
 
+    gen_update_pc(ctx, ctx->cur_insn_len);
     gen_helper_csreturn(cpu_env, rs1, rs2);
+    lookup_and_goto_ptr(ctx);
 
     return true;
 }
