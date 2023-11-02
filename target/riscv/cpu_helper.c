@@ -1725,7 +1725,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                 env->pc = env->pc_cap.bounds.cursor;
 
                 // swap ceh
-                swap_capregval(cs->as, env, base_addr + 16, &env->ceh);
+                swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
 
                 // swap the GPRs
                 int i;
@@ -1737,7 +1737,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                 loaded_regval.val.cap.type = CAP_TYPE_SEALEDRET;
                 loaded_regval.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;
                 loaded_regval.val.cap.reg = 0;
-                loaded_regval.val.cap.async = CAP_ASYNC_INT;
+                loaded_regval.val.cap.async = CAP_ASYNC_ASYNC;
 
                 env->gpr[1] = loaded_regval;
                 env->cih = CAPREGVAL_NULL; // disabling further interrupts
@@ -1749,15 +1749,16 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             }
         } else {
             // exception handling
+            // FIXME: exception handling should not follow this path
             // TODO: consider the exception delegation case
-            assert(env->ceh.tag); // must be a capability
-            assert(cap_type_in_mask(&env->ceh.val.cap, CAP_TYPE_MASK_SEALED |
+            assert(env->ctvec.tag); // must be a capability
+            assert(cap_type_in_mask(&env->ctvec.val.cap, CAP_TYPE_MASK_SEALED |
                 CAP_TYPE_MASK_LIN | CAP_TYPE_MASK_NONLIN));
 
-            capaddr_t base_addr = env->ceh.val.cap.bounds.base;
+            capaddr_t base_addr = env->ctvec.val.cap.bounds.base;
 
-            if(env->ceh.val.cap.type == CAP_TYPE_SEALED) {
-                assert(env->ceh.val.cap.async == CAP_ASYNC_SYNC);
+            if(env->ctvec.val.cap.type == CAP_TYPE_SEALED) {
+                assert(env->ctvec.val.cap.async == CAP_ASYNC_SYNC);
 
                 // swap pc cap
                 capregval_t loaded_regval;
@@ -1774,27 +1775,27 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                     swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
                 }
 
-                env->ceh.val.cap.type = CAP_TYPE_SEALEDRET;
-                env->ceh.val.cap.bounds.cursor = env->ceh.val.cap.bounds.base;
-                env->ceh.val.cap.reg = 0;
-                env->ceh.val.cap.async = CAP_ASYNC_ECPT;
+                env->ctvec.val.cap.type = CAP_TYPE_SEALEDRET;
+                env->ctvec.val.cap.bounds.cursor = env->ctvec.val.cap.bounds.base;
+                env->ctvec.val.cap.reg = 0;
+                // env->ctvec.val.cap.async = CAP_ASYNC_ECPT;
 
                 // write ceh to ra
-                env->gpr[1] = env->ceh;
-                env->ceh = CAPREGVAL_NULL;
+                env->gpr[1] = env->ctvec;
+                env->ctvec = CAPREGVAL_NULL;
 
                 // swap ceh
-                store_capregval(cs->as, env, base_addr + 16, &env->ceh);
+                store_capregval(cs->as, env, base_addr + 16, &env->ctvec);
 
                 // exception code
                 capregval_set_scalar(&env->gpr[10], cause);
             } else {
                 env->pc_cap.bounds.cursor = env->pc;
-                capregval_set_cap(&env->epc, &env->pc_cap);
-                env->pc_cap = env->ceh.val.cap;
+                capregval_set_cap(&env->cepc, &env->pc_cap);
+                env->pc_cap = env->ctvec.val.cap;
                 env->pc = env->pc_cap.bounds.cursor;
                 if(!captype_is_copyable(env->pc_cap.type)) {
-                    env->ceh = CAPREGVAL_NULL;
+                    env->ctvec = CAPREGVAL_NULL;
                 }
 
                 // exception code

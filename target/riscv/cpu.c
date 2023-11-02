@@ -402,10 +402,10 @@ static void rv64_base_cpu_init(Object *obj)
 #endif
 
     /* TODO: hack for now */
-    env->ceh.tag = false;
+    env->ctvec.tag = false;
     env->cih.tag = false;
-    env->cinit.tag = false;
-    env->epc.tag = false;
+    env->cepc.tag = false;
+    env->cscratch.tag = false;
 
     env->cmmu.tag = true;
     env->cmmu.val.cap.bounds.cursor = 0x0;

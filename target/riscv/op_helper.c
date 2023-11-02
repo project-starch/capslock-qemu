@@ -814,22 +814,21 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
     assert(rs1_v->tag);
 
     switch((capstone_ccsr_id_t)ccsr_id) {
-        case CAPSTONE_CCSR_CEH:
-            // TODO: ceh
-            ccsr = &env->ceh;
+        case CAPSTONE_CCSR_CTVEC:
+            ccsr = &env->ctvec;
             break;
         case CAPSTONE_CCSR_CIH:
             assert(!env->cih.tag); /* only writable when originally not a capability */
             ccsr = &env->cih;
             break;
-        case CAPSTONE_CCSR_CINIT:
-            ccsr = &env->cinit;
-            break;
-        case CAPSTONE_CCSR_EPC:
-            ccsr = &env->epc;
+        case CAPSTONE_CCSR_CEPC:
+            ccsr = &env->cepc;
             break;
         case CAPSTONE_CCSR_CMMU:
             ccsr = &env->cmmu;
+            break;
+        case CAPSTONE_CCSR_CSCRATCH:
+            ccsr = &env->cscratch;
             break;
         default:
             assert(false); // not a valid CCSR
@@ -992,7 +991,7 @@ void helper_cscall(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     env->pc = loaded_val.val.cap.bounds.cursor;
 
     // swap ceh
-    swap_capregval(cs->as, env, base_addr + 16, &env->ceh);
+    swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
 
     // swap csp
     swap_capregval(cs->as, env, base_addr + 16 * 2, &env->gpr[2]);
@@ -1017,11 +1016,11 @@ void helper_csreturn(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
         }
 
         env->pc_cap.bounds.cursor = rs2_v->val.scalar;
-        capregval_set_cap(&env->ceh, &env->pc_cap);
-        cap_set_capregval(&env->pc_cap, &env->epc);
+        capregval_set_cap(&env->ctvec, &env->pc_cap);
+        cap_set_capregval(&env->pc_cap, &env->cepc);
         env->pc = env->pc_cap.bounds.cursor;
         if(env->pc_cap.type != CAP_TYPE_NONLIN) {
-            env->epc = CAPREGVAL_NULL;
+            env->cepc = CAPREGVAL_NULL;
         }
     } else {
         if(!rs1_v->tag || rs2_v->tag) {
@@ -1051,7 +1050,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
                 env->pc = env->pc_cap.bounds.cursor;
 
                 // swap ceh
-                swap_capregval(cs->as, env, base_addr + 16, &env->ceh);
+                swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
 
                 // swap csp
                 swap_capregval(cs->as, env, base_addr + 16 * 2, &env->gpr[2]);
@@ -1061,30 +1060,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
                 env->gpr[rs1_cap.reg].val.cap.type = CAP_TYPE_SEALED;
 
                 break;
-            case CAP_ASYNC_ECPT:
-                // swap PC
-                env->pc_cap.bounds.cursor = rs2_v->val.scalar;
-                load_capregval(cs->as, env, base_addr, &loaded_val);
-                store_cap(cs->as, env, base_addr, &env->pc_cap);
-                cap_set_capregval(&env->pc_cap, &loaded_val);
-                env->pc = env->pc_cap.bounds.cursor;
-
-                // store ceh
-                store_capregval(cs->as, env, base_addr + 16, &env->ceh);
-
-                rs1_cap.type = CAP_TYPE_SEALED;
-                rs1_cap.async = CAP_ASYNC_SYNC;
-                capregval_set_cap(&env->ceh, &rs1_cap);
-
-                *rs1_v = CAPREGVAL_NULL;
-
-                // swap GPRs
-                for(i = 1; i < 32; i ++) {
-                    swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
-                }
-
-                break;
-            case CAP_ASYNC_INT:
+            case CAP_ASYNC_ASYNC:
                 // swap PC
                 env->pc_cap.bounds.cursor = rs2_v->val.scalar;
                 load_capregval(cs->as, env, base_addr, &loaded_val);
@@ -1093,7 +1069,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
                 env->pc = env->pc_cap.bounds.cursor;
 
                 // swap ceh
-                swap_capregval(cs->as, env, base_addr + 16, &env->ceh);
+                swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
 
                 rs1_cap.type = CAP_TYPE_SEALED;
                 rs1_cap.async = CAP_ASYNC_SYNC;

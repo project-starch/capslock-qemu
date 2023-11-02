@@ -46,8 +46,7 @@ DEF_CAP_TYPE_MASK(SEALEDRET)
 
 enum CapAsync {
     CAP_ASYNC_SYNC      = 0x0,
-    CAP_ASYNC_ECPT      = 0x1,
-    CAP_ASYNC_INT       = 0x2
+    CAP_ASYNC_ASYNC       = 0x1
 };
 
 typedef enum CapAsync capasync_t;
