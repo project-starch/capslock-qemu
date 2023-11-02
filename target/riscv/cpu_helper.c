@@ -1703,109 +1703,54 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                   "epc:0x"TARGET_FMT_lx", tval:0x"TARGET_FMT_lx", desc=%s\n",
                   __func__, env->mhartid, async, cause, env->pc, tval,
                   riscv_cpu_get_trap_name(cause, async));
+
+    // TODO: distinguish H-interrupts from V-interrupts
     
-    if (env->cap_mem) {
-        /* Capstone-specific exception/interrupt handling */
-        if (async) {
-            /* handle interrupt in C-mode */
-            // need to look at cih
-            if(capstone_int_can_take(env)) {
-                // can deliver the exception
-                // TODO: need to save more state for S/U modes
+    /* Capstone-specific exception/interrupt handling */
+    if (async && env-> cap_mem) {
+        /* handle H-interrupt in C-mode */
+        // need to look at cih
+        if(capstone_int_can_take(env)) {
+            // can deliver the exception
+            // TODO: need to save more state for S/U modes
 
-                capaddr_t base_addr = env->cih.val.cap.bounds.base;
+            capaddr_t base_addr = env->cih.val.cap.bounds.base;
 
-                // swap pc cap
-                capregval_t loaded_regval;
-                load_capregval(cs->as, env, base_addr, &loaded_regval);
-                env->pc_cap.bounds.cursor = env->pc;
-                store_cap(cs->as, env, base_addr, &env->pc_cap);
-                assert(loaded_regval.tag);
-                env->pc_cap = loaded_regval.val.cap;
-                env->pc = env->pc_cap.bounds.cursor;
+            // swap pc cap
+            capregval_t loaded_regval;
+            load_capregval(cs->as, env, base_addr, &loaded_regval);
+            env->pc_cap.bounds.cursor = env->pc;
+            store_cap(cs->as, env, base_addr, &env->pc_cap);
+            assert(loaded_regval.tag);
+            env->pc_cap = loaded_regval.val.cap;
+            env->pc = env->pc_cap.bounds.cursor;
 
-                // swap ceh
-                swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
+            // swap ceh
+            swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
 
-                // swap the GPRs
-                int i;
-                for(i = 1; i < 32; i ++) {
-                    swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
-                }
-
-                loaded_regval = env->cih;
-                loaded_regval.val.cap.type = CAP_TYPE_SEALEDRET;
-                loaded_regval.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;
-                loaded_regval.val.cap.reg = 0;
-                loaded_regval.val.cap.async = CAP_ASYNC_ASYNC;
-
-                env->gpr[1] = loaded_regval;
-                env->cih = CAPREGVAL_NULL; // disabling further interrupts
-
-                env->gpr[10].tag = false;
-                env->gpr[10].val.scalar = cause;
-
-                riscv_cpu_set_mode(env, PRV_C);
+            // swap the GPRs
+            int i;
+            for(i = 1; i < 32; i ++) {
+                swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
             }
-        } else {
-            // exception handling
-            // FIXME: exception handling should not follow this path
-            // TODO: consider the exception delegation case
-            assert(env->ctvec.tag); // must be a capability
-            assert(cap_type_in_mask(&env->ctvec.val.cap, CAP_TYPE_MASK_SEALED |
-                CAP_TYPE_MASK_LIN | CAP_TYPE_MASK_NONLIN));
 
-            capaddr_t base_addr = env->ctvec.val.cap.bounds.base;
+            loaded_regval = env->cih;
+            loaded_regval.val.cap.type = CAP_TYPE_SEALEDRET;
+            loaded_regval.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;
+            loaded_regval.val.cap.reg = 0;
+            loaded_regval.val.cap.async = CAP_ASYNC_ASYNC;
 
-            if(env->ctvec.val.cap.type == CAP_TYPE_SEALED) {
-                assert(env->ctvec.val.cap.async == CAP_ASYNC_SYNC);
+            env->gpr[1] = loaded_regval;
+            env->cih = CAPREGVAL_NULL; // disabling further interrupts
 
-                // swap pc cap
-                capregval_t loaded_regval;
-                load_capregval(cs->as, env, base_addr, &loaded_regval);
-                env->pc_cap.bounds.cursor = env->pc;
-                store_cap(cs->as, env, base_addr, &env->pc_cap);
-                assert(loaded_regval.tag);
-                env->pc_cap = loaded_regval.val.cap;
-                env->pc = env->pc_cap.bounds.cursor;
+            env->gpr[10].tag = false;
+            env->gpr[10].val.scalar = cause;
 
-                // swap GPRs
-                int i;
-                for(i = 1; i < 32; i ++) {
-                    swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
-                }
-
-                env->ctvec.val.cap.type = CAP_TYPE_SEALEDRET;
-                env->ctvec.val.cap.bounds.cursor = env->ctvec.val.cap.bounds.base;
-                env->ctvec.val.cap.reg = 0;
-                // env->ctvec.val.cap.async = CAP_ASYNC_ECPT;
-
-                // write ceh to ra
-                env->gpr[1] = env->ctvec;
-                env->ctvec = CAPREGVAL_NULL;
-
-                // swap ceh
-                store_capregval(cs->as, env, base_addr + 16, &env->ctvec);
-
-                // exception code
-                capregval_set_scalar(&env->gpr[10], cause);
-            } else {
-                env->pc_cap.bounds.cursor = env->pc;
-                capregval_set_cap(&env->cepc, &env->pc_cap);
-                env->pc_cap = env->ctvec.val.cap;
-                env->pc = env->pc_cap.bounds.cursor;
-                if(!captype_is_copyable(env->pc_cap.type)) {
-                    env->ctvec = CAPREGVAL_NULL;
-                }
-
-                // exception code
-                // TODO: do we reuse the M-mode ones?
-                env->mcause = cause;
-                env->mtval = tval;
-            }
+            riscv_cpu_set_mode(env, PRV_C);
         }
     } else if (env->priv <= PRV_S &&
         cause < TARGET_LONG_BITS && ((deleg >> cause) & 1)) {
+        // TODO: V-interrupts might also be handled here
         /* handle the trap in S-mode */
         if (riscv_has_ext(env, RVH)) {
             uint64_t hdeleg = async ? env->hideleg : env->hedeleg;
@@ -1853,7 +1798,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                   ((async && (env->stvec & 3) == 1) ? cause * 4 : 0);
         riscv_cpu_set_mode(env, PRV_S);
     } else {
-        /* handle the trap in M-mode */
+        /* handle the trap in M-mode or C-mode */
         if (riscv_has_ext(env, RVH)) {
             if (env->virt_enabled) {
                 riscv_cpu_swap_hypervisor_regs(env);
@@ -1870,20 +1815,45 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             riscv_cpu_set_virt_enabled(env, 0);
         }
 
-        s = env->mstatus;
-        s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));
-        s = set_field(s, MSTATUS_MPP, env->priv);
-        s = set_field(s, MSTATUS_MIE, 0);
-        env->mstatus = s;
-        env->mcause = cause | ~(((target_ulong)-1) >> async);
-        env->mepc = env->pc;
-        env->mtval = tval;
-        env->mtval2 = mtval2;
-        env->mtinst = tinst;
-        env->pc = (env->mtvec >> 2 << 2) +
-                ((async && (env->mtvec & 3) == 1) ? cause * 4 : 0);
-        riscv_cpu_set_mode(env, PRV_M);
-    }
+        if(env->cap_mem) {
+            /* handle exceptions in C mode */
+            assert(!async);
+
+            s = env->mstatus;
+            s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));
+            s = set_field(s, MSTATUS_MPP, env->priv);
+            s = set_field(s, MSTATUS_MIE, 0);
+            env->mstatus = s;
+            env->mcause = cause | ~(((target_ulong)-1) >> async);
+            if(env->priv == PRV_C) {
+                // horizontal trap
+                env->pc_cap.bounds.cursor = env->pc;
+                capregval_set_cap(&env->cepc, &env->pc_cap);
+            } else {
+                capregval_set_scalar(&env->cepc, env->pc);
+            }
+            env->mtval = tval;
+            env->mtval2 = mtval2;
+            env->mtinst = tinst;
+            assert(env->ctvec.tag);
+            pc_redirect_to_cap(env, &env->ctvec.val.cap);
+            riscv_cpu_set_mode(env, PRV_C);
+        } else {
+            s = env->mstatus;
+            s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));
+            s = set_field(s, MSTATUS_MPP, env->priv);
+            s = set_field(s, MSTATUS_MIE, 0);
+            env->mstatus = s;
+            env->mcause = cause | ~(((target_ulong)-1) >> async);
+            env->mepc = env->pc;
+            env->mtval = tval;
+            env->mtval2 = mtval2;
+            env->mtinst = tinst;
+            env->pc = (env->mtvec >> 2 << 2) +
+                    ((async && (env->mtvec & 3) == 1) ? cause * 4 : 0);
+            riscv_cpu_set_mode(env, PRV_M);
+         }
+   }
 
     /*
      * NOTE: it is not necessary to yield load reservations here. It is only

@@ -6,3 +6,5 @@ xargs -a qemu-args.txt installation/bin/qemu-system-riscv64 -s -S &
 tmux split-window -h gdb-multiarch -x debug/init.gdb
 
 wait
+
+stty echo

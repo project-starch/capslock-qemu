@@ -327,7 +327,7 @@ target_ulong helper_mret(CPURISCVState *env)
         riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
     }
 
-    target_ulong retpc = env->mepc;
+    target_ulong retpc = env->cap_mem ? env->cepc.val.scalar : env->mepc;
     if (!riscv_has_ext(env, RVC) && (retpc & 0x3)) {
         riscv_raise_exception(env, RISCV_EXCP_INST_ADDR_MIS, GETPC());
     }
@@ -360,6 +360,10 @@ target_ulong helper_mret(CPURISCVState *env)
         }
 
         riscv_cpu_set_virt_enabled(env, prev_virt);
+    }
+
+    if (env->cap_mem) {
+        pc_redirect_to_capregval(env, &env->cepc);
     }
 
     return retpc;
@@ -811,7 +815,7 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
 
     CPUState* cpu = env_cpu(env);
 
-    assert(rs1_v->tag);
+    // assert(rs1_v->tag);
 
     switch((capstone_ccsr_id_t)ccsr_id) {
         case CAPSTONE_CCSR_CTVEC:
