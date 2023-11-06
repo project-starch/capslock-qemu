@@ -1209,7 +1209,7 @@ DEF_HELPER_3(remove_cap_mem_map, void, env, tl, i32)
 DEF_HELPER_4(cjalr_switch_caps, void, env, i32, i32, tl)
 DEF_HELPER_2(set_pc_cap, void, env, i32)
 DEF_HELPER_3(cscall, void, env, i32, i32)
-DEF_HELPER_3(csreturn, void, env, i32, i32)
+DEF_HELPER_4(csreturn, void, env, i32, i32, i32)
 
 /* Helpers for debug instructions */
 DEF_HELPER_4(csdebuggencap, void, env, i32, tl, tl)

@@ -1762,13 +1762,17 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         env->pc_cap = loaded_regval.val.cap;
         env->pc = env->pc_cap.bounds.cursor;
 
+        // store prv
+        capregval_set_scalar(&loaded_regval, env->priv);
+        store_capregval(cs->as, env, base_addr + 16, &loaded_regval);
+
         // swap ceh
-        swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
+        swap_capregval(cs->as, env, base_addr + 16 * 2, &env->ctvec);
 
         // swap the GPRs
         int i;
         for(i = 1; i < 32; i ++) {
-            swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
+            swap_capregval(cs->as, env, base_addr + 16 * (i + 2), &env->gpr[i]);
         }
 
         loaded_regval = env->cih;
@@ -1782,6 +1786,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
         env->gpr[10].tag = false;
         env->gpr[10].val.scalar = cause;
+        env->cic = cause; // TODO: probably remove CIC
 
         riscv_cpu_set_mode(env, PRV_C);
     } else if (env->priv <= PRV_S &&
@@ -1853,7 +1858,8 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
         if(env->cap_mem) {
             /* handle exceptions in C mode */
-            assert(!async);
+            /* This might also be a V-interrupt */
+            assert(!async); // should crash now
 
             s = env->mstatus;
             s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));
