@@ -38,6 +38,7 @@
 #include "kvm_riscv.h"
 #include "tcg/tcg.h"
 #include "cap.h"
+#include "capstone_defs.h"
 #include "cap_mem_map.h"
 
 /* RISC-V CPU definitions */
@@ -1571,6 +1572,30 @@ static void riscv_add_satp_mode_properties(Object *obj)
     }
 }
 
+static inline int riscv_conflate_irq(int irq) {
+//     int res = -1;
+//     switch(irq) {
+//         case IRQ_U_EXT:
+//         case IRQ_S_EXT:
+//         case IRQ_M_EXT:
+//             res = CAPSTONE_IRQ_EXT;
+//             break;
+//         case IRQ_U_TIMER:
+//         case IRQ_S_TIMER:
+//         case IRQ_M_TIMER:
+//             res = CAPSTONE_IRQ_TIMER;
+//             break;
+//         case IRQ_U_SOFT:
+//         case IRQ_S_SOFT:
+//         case IRQ_M_SOFT:
+//             res = CAPSTONE_IRQ_SOFT;
+//             break;
+//         default: ;
+//     }
+//     return res;
+    return irq;
+}
+
 static void riscv_cpu_set_irq(void *opaque, int irq, int level)
 {
     RISCVCPU *cpu = RISCV_CPU(opaque);
@@ -1589,20 +1614,32 @@ static void riscv_cpu_set_irq(void *opaque, int irq, int level)
         case IRQ_U_EXT:
         case IRQ_VS_EXT:
         case IRQ_M_EXT:
-            if (kvm_enabled()) {
-                kvm_riscv_set_irq(cpu, irq, level);
+            assert(!kvm_enabled()); // We don't support KVM for now
+            // if (kvm_enabled()) {
+            //     kvm_riscv_set_irq(cpu, irq, level);
+            // } else {
+            if(env->cap_mem) {
+                int capstone_irq = riscv_conflate_irq(irq);
+                riscv_cpu_update_h_int(env, capstone_irq, level);
             } else {
                 riscv_cpu_update_mip(env, 1 << irq, BOOL_TO_MASK(level));
             }
+            // }
              break;
         case IRQ_S_EXT:
-            if (kvm_enabled()) {
-                kvm_riscv_set_irq(cpu, irq, level);
+            assert(!kvm_enabled()); // We don't support KVM for now
+            // if (kvm_enabled()) {
+            //     kvm_riscv_set_irq(cpu, irq, level);
+            // } else {
+            env->external_seip = level;
+            if(env->cap_mem) {
+                int capstone_irq = riscv_conflate_irq(irq);
+                riscv_cpu_update_h_int(env, capstone_irq, level | env->software_seip);
             } else {
-                env->external_seip = level;
                 riscv_cpu_update_mip(env, 1 << irq,
                                      BOOL_TO_MASK(level | env->software_seip));
             }
+            // }
             break;
         default:
             g_assert_not_reached();

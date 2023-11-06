@@ -380,6 +380,10 @@ struct CPUArchState {
     capregval_t cmmu; /* capability for use with MMU-based memory accesses */
     capregval_t cscratch; /* scratch register for the C mode */
 
+    target_ulong cis;
+    target_ulong cic;
+    target_ulong offsetmmu;
+
     bool cap_mem; /* temporary: use capabilities for memory accesses */
 
     cap_mem_map_t cm_map; /* maintains locations of capabilities in memory */
@@ -481,6 +485,8 @@ void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env);
 int riscv_cpu_claim_interrupts(RISCVCPU *cpu, uint64_t interrupts);
 uint64_t riscv_cpu_update_mip(CPURISCVState *env, uint64_t mask,
                               uint64_t value);
+void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level);
+
 #define BOOL_TO_MASK(x) (-!!(x)) /* helper for riscv_cpu_update_mip value */
 void riscv_cpu_set_rdtime_fn(CPURISCVState *env, uint64_t (*fn)(void *),
                              void *arg);
@@ -740,5 +746,8 @@ void riscv_cpu_register_gdb_regs_for_features(CPUState *cs);
 
 uint8_t satp_mode_max_from_map(uint32_t map);
 const char *satp_mode_str(uint8_t satp_mode, bool is_32_bit);
+
+
+void riscv_cpu_check_interrupts(CPURISCVState *env);
 
 #endif /* RISCV_CPU_H */

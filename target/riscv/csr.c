@@ -4062,6 +4062,45 @@ static RISCVException write_jvt(CPURISCVState *env, int csrno,
     return RISCV_EXCP_NONE;
 }
 
+
+
+/* Capstone CSRs */
+
+static RISCVException read_cis(CPURISCVState *env, int csrno, target_ulong *val) {
+    *val = env->cis;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException write_cis(CPURISCVState *env, int csrno, target_ulong val) {
+    QEMU_IOTHREAD_LOCK_GUARD();
+    env->cis = val;
+    riscv_cpu_check_interrupts(env);
+    return RISCV_EXCP_NONE;
+}
+
+
+static RISCVException read_cic(CPURISCVState *env, int csrno, target_ulong *val) {
+    *val = env->cic;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException write_cic(CPURISCVState *env, int csrno, target_ulong val) {
+    env->cic = val;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException read_offsetmmu(CPURISCVState *env, int csrno, target_ulong *val) {
+    *val = env->offsetmmu;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException write_offsetmmu(CPURISCVState *env, int csrno, target_ulong val) {
+    /* TODO: need to force re-translation */
+    env->offsetmmu = val;
+    return RISCV_EXCP_NONE;
+}
+
+
 /*
  * Control and Status Register function table
  * riscv_csr_operations::predicate() must be provided for an implemented CSR
@@ -4743,6 +4782,11 @@ riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
                              write_mhpmcounterh                         },
     [CSR_SCOUNTOVF]      = { "scountovf", sscofpmf,  read_scountovf,
                              .min_priv_ver = PRIV_VERSION_1_12_0 },
-
+    [CSR_CIS]            = { "cis", any, read_cis,
+                             write_cis },
+    [CSR_CIC]            = { "cic", any, read_cic,
+                             write_cic },
+    [CSR_OFFSETMMU]      = { "offsetmmu", any, read_offsetmmu,
+                             write_offsetmmu },
 #endif /* !CONFIG_USER_ONLY */
 };

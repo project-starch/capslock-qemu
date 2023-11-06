@@ -14,4 +14,12 @@ enum CapstoneCCSRId {
 
 typedef enum CapstoneCCSRId capstone_ccsr_id_t;
 
+
+#define CAPSTONE_IRQ_EXT   0x0
+#define CAPSTONE_IRQ_TIMER 0x1
+#define CAPSTONE_IRQ_SOFT  0x2
+#define CAPSTONE_IRQ_MX    CAPSTONE_IRQ_SOFT
+
+#define CAPSTONE_CIS_PENDING_MASK    0x15
+
 #endif

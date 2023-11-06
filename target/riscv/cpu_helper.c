@@ -425,6 +425,20 @@ static int riscv_cpu_local_irq_pending(CPURISCVState *env)
     int virq;
     uint64_t irqs, pending, mie, hsie, vsie;
 
+    if(env->cap_mem) {
+        /* Check H-interrupts */
+        /* H-interrupts take precedence over V-interrupts */
+
+        if(env->cis && env->cih.tag) {
+            // just get any pending IRQ
+            int nxt_irq;
+            for(nxt_irq = 0; (env->cis >> nxt_irq) && !((env->cis >> nxt_irq) & 1);
+                ++ nxt_irq);
+            assert(((env->cis) >> nxt_irq) & 1);
+            return nxt_irq;
+        }
+    }
+
     /* Determine interrupt enable state of all privilege modes */
     if (env->virt_enabled) {
         mie = 1;
@@ -628,11 +642,9 @@ int riscv_cpu_claim_interrupts(RISCVCPU *cpu, uint64_t interrupts)
     }
 }
 
-uint64_t riscv_cpu_update_mip(CPURISCVState *env, uint64_t mask,
-                              uint64_t value)
-{
+void riscv_cpu_check_interrupts(CPURISCVState *env) {
     CPUState *cs = env_cpu(env);
-    uint64_t gein, vsgein = 0, vstip = 0, old = env->mip;
+    uint64_t gein, vsgein = 0, vstip = 0;
 
     if (env->virt_enabled) {
         gein = get_field(env->hstatus, HSTATUS_VGEIN);
@@ -641,15 +653,41 @@ uint64_t riscv_cpu_update_mip(CPURISCVState *env, uint64_t mask,
 
     vstip = env->vstime_irq ? MIP_VSTIP : 0;
 
-    QEMU_IOTHREAD_LOCK_GUARD();
-
-    env->mip = (env->mip & ~mask) | (value & mask);
-
-    if (env->mip | vsgein | vstip) {
+    // if(env->cis & CAPSTONE_CIS_PENDING_MASK) {
+    if(env->cis) {
+        // we got some pending H-interrupts
+        cpu_interrupt(cs, CPU_INTERRUPT_HARD);
+    } else if(env->mip | vsgein | vstip) {
         cpu_interrupt(cs, CPU_INTERRUPT_HARD);
     } else {
         cpu_reset_interrupt(cs, CPU_INTERRUPT_HARD);
     }
+}
+
+void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level) {
+    // assert(capstone_irq >= 0 && capstone_irq <= CAPSTONE_IRQ_MX);
+
+    // uint64_t mask = (1 << (capstone_irq << 1));
+    uint64_t mask = 1 << capstone_irq;
+    uint64_t value = BOOL_TO_MASK(level);
+
+    QEMU_IOTHREAD_LOCK_GUARD();
+
+    env->cis = (env->cis & ~mask) | (value & mask);
+    
+    riscv_cpu_check_interrupts(env);
+}
+
+uint64_t riscv_cpu_update_mip(CPURISCVState *env, uint64_t mask,
+                              uint64_t value)
+{
+    uint64_t old = env->mip;
+
+    QEMU_IOTHREAD_LOCK_GUARD();
+
+    env->mip = (env->mip & ~mask) | (value & mask);
+
+    riscv_cpu_check_interrupts(env);
 
     return old;
 }
@@ -1707,47 +1745,45 @@ void riscv_cpu_do_interrupt(CPUState *cs)
     // TODO: distinguish H-interrupts from V-interrupts
     
     /* Capstone-specific exception/interrupt handling */
-    if (async && env-> cap_mem) {
+    if (async && env->cap_mem && env->cis && capstone_int_can_take(env)) {
         /* handle H-interrupt in C-mode */
         // need to look at cih
-        if(capstone_int_can_take(env)) {
-            // can deliver the exception
-            // TODO: need to save more state for S/U modes
+        // can deliver the exception
+        // TODO: need to save more state for S/U modes
 
-            capaddr_t base_addr = env->cih.val.cap.bounds.base;
+        capaddr_t base_addr = env->cih.val.cap.bounds.base;
 
-            // swap pc cap
-            capregval_t loaded_regval;
-            load_capregval(cs->as, env, base_addr, &loaded_regval);
-            env->pc_cap.bounds.cursor = env->pc;
-            store_cap(cs->as, env, base_addr, &env->pc_cap);
-            assert(loaded_regval.tag);
-            env->pc_cap = loaded_regval.val.cap;
-            env->pc = env->pc_cap.bounds.cursor;
+        // swap pc cap
+        capregval_t loaded_regval;
+        load_capregval(cs->as, env, base_addr, &loaded_regval);
+        env->pc_cap.bounds.cursor = env->pc;
+        store_cap(cs->as, env, base_addr, &env->pc_cap);
+        assert(loaded_regval.tag);
+        env->pc_cap = loaded_regval.val.cap;
+        env->pc = env->pc_cap.bounds.cursor;
 
-            // swap ceh
-            swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
+        // swap ceh
+        swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
 
-            // swap the GPRs
-            int i;
-            for(i = 1; i < 32; i ++) {
-                swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
-            }
-
-            loaded_regval = env->cih;
-            loaded_regval.val.cap.type = CAP_TYPE_SEALEDRET;
-            loaded_regval.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;
-            loaded_regval.val.cap.reg = 0;
-            loaded_regval.val.cap.async = CAP_ASYNC_ASYNC;
-
-            env->gpr[1] = loaded_regval;
-            env->cih = CAPREGVAL_NULL; // disabling further interrupts
-
-            env->gpr[10].tag = false;
-            env->gpr[10].val.scalar = cause;
-
-            riscv_cpu_set_mode(env, PRV_C);
+        // swap the GPRs
+        int i;
+        for(i = 1; i < 32; i ++) {
+            swap_capregval(cs->as, env, base_addr + 16 * (i + 1), &env->gpr[i]);
         }
+
+        loaded_regval = env->cih;
+        loaded_regval.val.cap.type = CAP_TYPE_SEALEDRET;
+        loaded_regval.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;
+        loaded_regval.val.cap.reg = 0;
+        loaded_regval.val.cap.async = CAP_ASYNC_ASYNC;
+
+        env->gpr[1] = loaded_regval;
+        env->cih = CAPREGVAL_NULL; // disabling further interrupts
+
+        env->gpr[10].tag = false;
+        env->gpr[10].val.scalar = cause;
+
+        riscv_cpu_set_mode(env, PRV_C);
     } else if (env->priv <= PRV_S &&
         cause < TARGET_LONG_BITS && ((deleg >> cause) & 1)) {
         // TODO: V-interrupts might also be handled here
