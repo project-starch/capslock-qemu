@@ -4078,6 +4078,15 @@ static RISCVException write_cis(CPURISCVState *env, int csrno, target_ulong val)
     return RISCV_EXCP_NONE;
 }
 
+static RISCVException read_cid(CPURISCVState *env, int csrno, target_ulong *val) {
+    *val = env->cid;
+    return RISCV_EXCP_NONE;
+}
+
+static RISCVException write_cid(CPURISCVState *env, int csrno, target_ulong val) {
+    env->cid = val;
+    return RISCV_EXCP_NONE;
+}
 
 static RISCVException read_cic(CPURISCVState *env, int csrno, target_ulong *val) {
     *val = env->cic;
@@ -4784,6 +4793,8 @@ riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
                              .min_priv_ver = PRIV_VERSION_1_12_0 },
     [CSR_CIS]            = { "cis", any, read_cis,
                              write_cis },
+    [CSR_CID]            = { "cid", any, read_cid,
+                             write_cid },
     [CSR_CIC]            = { "cic", any, read_cic,
                              write_cic },
     [CSR_OFFSETMMU]      = { "offsetmmu", any, read_offsetmmu,

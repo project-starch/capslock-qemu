@@ -203,9 +203,12 @@ static bool trans_csreturn(DisasContext *ctx, arg_csreturn *a) {
     TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
 
+    decode_save_opc(ctx);
+    translator_io_start(&ctx->base);
     gen_update_pc(ctx, ctx->cur_insn_len);
     gen_helper_csreturn(cpu_env, rd, rs1, rs2);
-    lookup_and_goto_ptr(ctx);
+    exit_tb(ctx);
+    ctx->base.is_jmp = DISAS_NORETURN; /* This might change priv */
 
     return true;
 }

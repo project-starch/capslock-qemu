@@ -855,7 +855,7 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
 #define CAPSTONE_IMM12_SEXT(x) ((x) | (((-((x) >> 11)) << 12)))
 
 static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, uint32_t memop, bool is_store) {
-    CAPSTONE_DEBUG_PRINT("Cap mem access %u %lx\n", rs1, imm);
+    // CAPSTONE_DEBUG_PRINT("Cap mem access %u %lx\n", rs1, imm);
 
     capregval_t* rs1_v = &env->gpr[rs1];
 
@@ -869,7 +869,7 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64
     imm = CAPSTONE_IMM12_SEXT(imm); // sign extend
     capaddr_t addr = cap->bounds.cursor + imm;
 
-    CAPSTONE_DEBUG_PRINT("Cap mem access addr = %lx, size = %lu\n", addr, (capaddr_t)size);
+    // CAPSTONE_DEBUG_PRINT("Cap mem access addr = %lx, size = %lu\n", addr, (capaddr_t)size);
 
     if(size == 16) {
         // accessing capabilities in memory, extra checks needed
@@ -1107,7 +1107,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
 /* helpers for Capstone debug instructions */
 
 void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
-    CAPSTONE_DEBUG_PRINT("Generating cap with (0x%lx, 0x%lx)\n", rs1_v, rs2_v);
+    // CAPSTONE_DEBUG_PRINT("Generating cap with (0x%lx, 0x%lx)\n", rs1_v, rs2_v);
     capregval_t* rd_v = &env->gpr[rd];
     capfat_t* cap = &rd_v->val.cap;
     cap->bounds.base = rs1_v;

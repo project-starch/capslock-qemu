@@ -278,7 +278,7 @@ static bool gen_load_tl_with_cap(DisasContext *ctx, arg_lb *a, MemOp memop)
     gen_helper_load_with_cap(addr, cpu_env, rs1, imm, memop_v);
     tcg_gen_qemu_ld_tl(dest, addr, ctx->mem_idx, memop);
     gen_set_gpr(ctx, a->rd, dest);
-    gen_helper_capstone_debugger(); // just to signal the end of the execution
+    // gen_helper_capstone_debugger(); // just to signal the end of the execution
 
     return true;
 }
@@ -287,7 +287,7 @@ static bool gen_load(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
     // TODO: support capability-based addressing
     decode_save_opc(ctx);
-    if (ctx->cap_mem && ctx->priv == PRV_U) {
+    if (ctx->cap_mem && ctx->priv == PRV_C) {
         // we need to use Capstone capabilities
         return gen_load_tl_with_cap(ctx, a, memop);
     } else {
@@ -390,7 +390,7 @@ static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
     gen_helper_store_with_cap(addr, cpu_env, rs1, imm, memop_v);
     tcg_gen_qemu_st_tl(data, addr, ctx->mem_idx, memop);
     gen_helper_remove_cap_mem_map(cpu_env, addr, memop_v);
-    gen_helper_capstone_debugger(); // just to signal the end of the execution
+    // gen_helper_capstone_debugger(); // just to signal the end of the execution
 
     return true;
 }
@@ -398,7 +398,7 @@ static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
 static bool gen_store(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
     decode_save_opc(ctx);
-    if (ctx->cap_mem && ctx->priv == PRV_U) {
+    if (ctx->cap_mem && ctx->priv == PRV_C) {
         /* perform store using a capability */
         return gen_store_tl_with_cap(ctx, a, memop);
     } else {

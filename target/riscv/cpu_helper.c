@@ -425,7 +425,9 @@ static int riscv_cpu_local_irq_pending(CPURISCVState *env)
     int virq;
     uint64_t irqs, pending, mie, hsie, vsie;
 
-    if(env->cap_mem) {
+    if(env->cap_mem
+        && env->priv < PRV_C /* TODO: a hack */
+    ) {
         /* Check H-interrupts */
         /* H-interrupts take precedence over V-interrupts */
 
@@ -671,9 +673,13 @@ void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level) {
     uint64_t mask = 1 << capstone_irq;
     uint64_t value = BOOL_TO_MASK(level);
 
+    uint64_t mask_mip = mask & env->cid;
+    uint64_t mask_cis = mask & ~mask_mip;
+
     QEMU_IOTHREAD_LOCK_GUARD();
 
-    env->cis = (env->cis & ~mask) | (value & mask);
+    env->cis = (env->cis & ~mask_cis) | (value & mask_cis);
+    env->mip = (env->mip & ~mask_mip) | (value & mask_mip);
     
     riscv_cpu_check_interrupts(env);
 }
@@ -1742,14 +1748,15 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                   __func__, env->mhartid, async, cause, env->pc, tval,
                   riscv_cpu_get_trap_name(cause, async));
 
-    // TODO: distinguish H-interrupts from V-interrupts
-    
+    assert(!env->cap_mem || env->priv < PRV_C); /* TODO: a hack */
     /* Capstone-specific exception/interrupt handling */
     if (async && env->cap_mem && env->cis && capstone_int_can_take(env)) {
         /* handle H-interrupt in C-mode */
         // need to look at cih
         // can deliver the exception
         // TODO: need to save more state for S/U modes
+
+        assert(env->priv < PRV_C); /* TODO: a hack */
 
         capaddr_t base_addr = env->cih.val.cap.bounds.base;
 
@@ -1859,7 +1866,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         if(env->cap_mem) {
             /* handle exceptions in C mode */
             /* This might also be a V-interrupt */
-            assert(!async); // should crash now
+            assert(env->priv < PRV_C); /* TODO: a hack */
 
             s = env->mstatus;
             s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));

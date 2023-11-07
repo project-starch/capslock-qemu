@@ -532,8 +532,9 @@
 
 /* Capstone CSRs */
 #define CSR_CIS             0x800
-#define CSR_CIC             0x801
-#define CSR_OFFSETMMU       0x802
+#define CSR_CID             0x801
+#define CSR_CIC             0x802
+#define CSR_OFFSETMMU       0x803
 
 /* mstatus CSR bits */
 #define MSTATUS_UIE         0x00000001

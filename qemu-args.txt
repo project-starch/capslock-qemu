@@ -4,3 +4,4 @@
 -append 'root=/dev/vda ro'
 -drive file=buildroot/output/images/rootfs.ext2,format=raw,id=hd0
 -device virtio-blk-device,drive=hd0
+-cpu rv64,sstc=false,h=false

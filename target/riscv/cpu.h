@@ -381,6 +381,7 @@ struct CPUArchState {
     capregval_t cscratch; /* scratch register for the C mode */
 
     target_ulong cis;
+    target_ulong cid;
     target_ulong cic;
     target_ulong offsetmmu;
 
