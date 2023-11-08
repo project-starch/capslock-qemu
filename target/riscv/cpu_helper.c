@@ -431,11 +431,11 @@ static int riscv_cpu_local_irq_pending(CPURISCVState *env)
         /* Check H-interrupts */
         /* H-interrupts take precedence over V-interrupts */
 
-        if((env->cis & env->mie) && env->cih.tag) {
+        if(env->cis && env->cih.tag) {
             // just get any pending IRQ
             int nxt_irq;
             for(nxt_irq = 0; (env->cis >> nxt_irq) && 
-                !(((env->cis & env->mie /* TODO: quick hack to follow mie */) >> nxt_irq) & 1);
+                !((env->cis >> nxt_irq) & 1);
                 ++ nxt_irq);
             assert(((env->cis) >> nxt_irq) & 1);
             return nxt_irq;
@@ -1751,7 +1751,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
     assert(!env->cap_mem || env->priv < PRV_C); /* TODO: a hack */
     /* Capstone-specific exception/interrupt handling */
-    if (async && env->cap_mem && (env->cis & env->mie /* TODO: hack */) && capstone_int_can_take(env)) {
+    if (async && env->cap_mem && env->cis && capstone_int_can_take(env)) {
         /* handle H-interrupt in C-mode */
         // need to look at cih
         // can deliver the exception
