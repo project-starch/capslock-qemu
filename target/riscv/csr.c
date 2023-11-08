@@ -1128,7 +1128,8 @@ static RISCVException write_stimecmph(CPURISCVState *env, int csrno,
 #define VSTOPI_NUM_SRCS 5
 
 static const uint64_t delegable_ints = S_MODE_INTERRUPTS |
-                                           VS_MODE_INTERRUPTS;
+                                           VS_MODE_INTERRUPTS |
+                                           M_MODE_INTERRUPTS; /* Capstone */
 static const uint64_t vs_delegable_ints = VS_MODE_INTERRUPTS;
 static const uint64_t all_ints = M_MODE_INTERRUPTS | S_MODE_INTERRUPTS |
                                      HS_MODE_INTERRUPTS;
