@@ -244,3 +244,8 @@ static bool trans_csdebugprint(DisasContext *ctx, arg_csdebugprint *a) {
     gen_helper_csdebugprint(cpu_env, rs1);
     return true;
 }
+
+static bool trans_csdebugbreak(DisasContext *ctx, arg_csdebugbreak *a) {
+    gen_helper_capstone_debugger();
+    return true;
+}
