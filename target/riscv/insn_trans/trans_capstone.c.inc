@@ -191,9 +191,12 @@ static bool trans_cscall(DisasContext *ctx, arg_cscall *a) {
     TCGv_i32 rd = tcg_constant_i32(a->rd);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
 
+    decode_save_opc(ctx);
+    translator_io_start(&ctx->base);
     gen_update_pc(ctx, ctx->cur_insn_len);
     gen_helper_cscall(cpu_env, rd, rs1);
-    lookup_and_goto_ptr(ctx);
+    exit_tb(ctx);
+    ctx->base.is_jmp = DISAS_NORETURN;
 
     return true;
 }

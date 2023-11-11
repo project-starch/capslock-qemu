@@ -1761,35 +1761,14 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
         capaddr_t base_addr = env->cih.val.cap.bounds.base;
 
-        // swap pc cap
-        capregval_t loaded_regval;
-        load_capregval(cs->as, env, base_addr, &loaded_regval);
-        env->pc_cap.bounds.cursor = env->pc;
-        store_cap(cs->as, env, base_addr, &env->pc_cap);
-        assert(loaded_regval.tag);
-        env->pc_cap = loaded_regval.val.cap;
-        env->pc = env->pc_cap.bounds.cursor;
+        swap_domain_scoped_regs(cs->as, env, base_addr, env->pc);
 
-        // store prv
-        capregval_set_scalar(&loaded_regval, env->priv);
-        store_capregval(cs->as, env, base_addr + 16, &loaded_regval);
+        env->cih.val.cap.type = CAP_TYPE_SEALEDRET;
+        env->cih.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;
+        env->cih.val.cap.reg = 0;
+        env->cih.val.cap.async = CAP_ASYNC_ASYNC;
 
-        // swap ceh
-        swap_capregval(cs->as, env, base_addr + 16 * 2, &env->ctvec);
-
-        // swap the GPRs
-        int i;
-        for(i = 1; i < 32; i ++) {
-            swap_capregval(cs->as, env, base_addr + 16 * (i + 2), &env->gpr[i]);
-        }
-
-        loaded_regval = env->cih;
-        loaded_regval.val.cap.type = CAP_TYPE_SEALEDRET;
-        loaded_regval.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;
-        loaded_regval.val.cap.reg = 0;
-        loaded_regval.val.cap.async = CAP_ASYNC_ASYNC;
-
-        env->gpr[1] = loaded_regval;
+        env->gpr[1] = env->cih;
         env->cih = CAPREGVAL_NULL; // disabling further interrupts
 
         env->gpr[10].tag = false;

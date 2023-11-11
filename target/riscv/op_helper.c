@@ -983,22 +983,8 @@ void helper_cscall(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     }
 
     capfat_t rs1_val = rs1_v->val.cap;
-    capaddr_t base_addr = rs1_val.bounds.base;
 
-    // swap PC
-    capregval_t loaded_val;
-    load_capregval(cs->as, env, base_addr, &loaded_val);
-    assert(loaded_val.tag);
-    env->pc_cap.bounds.cursor = env->pc;
-    store_cap(cs->as, env, base_addr, &env->pc_cap);
-    env->pc_cap = loaded_val.val.cap;
-    env->pc = loaded_val.val.cap.bounds.cursor;
-
-    // swap ceh
-    swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
-
-    // swap csp
-    swap_capregval(cs->as, env, base_addr + 16 * 2, &env->gpr[2]);
+    swap_c_effective_regs(cs->as, env, rs1_val.bounds.base, env->pc);
 
     // set cra
     rs1_val.type = CAP_TYPE_SEALEDRET;
@@ -1039,27 +1025,14 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
         }
 
         capfat_t rd_cap = rd_v->val.cap;
-        capregval_t loaded_val;
         capaddr_t base_addr = rd_cap.bounds.base;
         uint64_t rs2_val = rs2_v->val.scalar;
-        int i;
 
         switch(rd_cap.async) {
             case CAP_ASYNC_SYNC:
                 *rd_v = CAPREGVAL_NULL;
                 
-                // swap PC
-                env->pc_cap.bounds.cursor = rs1_v->val.scalar;
-                load_capregval(cs->as, env, base_addr, &loaded_val);
-                store_cap(cs->as, env, base_addr, &env->pc_cap);
-                cap_set_capregval(&env->pc_cap, &loaded_val);
-                env->pc = env->pc_cap.bounds.cursor;
-
-                // swap ceh
-                swap_capregval(cs->as, env, base_addr + 16, &env->ctvec);
-
-                // swap csp
-                swap_capregval(cs->as, env, base_addr + 16 * 2, &env->gpr[2]);
+                swap_c_effective_regs(cs->as, env, base_addr, rs1_v->val.scalar);
 
                 // write return reg
                 capregval_set_cap(&env->gpr[rd_cap.reg], &rd_cap);
@@ -1067,30 +1040,12 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
 
                 break;
             case CAP_ASYNC_ASYNC:
-                // swap PC
-                env->pc_cap.bounds.cursor = rs1_v->val.scalar;
-                load_capregval(cs->as, env, base_addr, &loaded_val);
-                store_cap(cs->as, env, base_addr, &env->pc_cap);
-                cap_set_capregval(&env->pc_cap, &loaded_val);
-                env->pc = env->pc_cap.bounds.cursor;
-
-                // load priv
-                load_capregval(cs->as, env, base_addr + 16, &loaded_val);
-                riscv_cpu_set_mode(env, loaded_val.val.scalar);
-
-                // swap ceh
-                swap_capregval(cs->as, env, base_addr + 16 * 2, &env->ctvec);
-
                 rd_cap.type = CAP_TYPE_SEALED;
                 rd_cap.async = CAP_ASYNC_SYNC;
                 capregval_set_cap(&env->cih, &rd_cap);
-
                 *rd_v = CAPREGVAL_NULL;
-                
-                // swap GPRs
-                for(i = 1; i < 32; i ++) {
-                    swap_capregval(cs->as, env, base_addr + 16 * (i + 2), &env->gpr[i]);
-                }
+
+                swap_domain_scoped_regs(cs->as, env, base_addr, rs1_v->val.scalar);
 
                 // post the interrupts
                 QEMU_IOTHREAD_LOCK_GUARD();

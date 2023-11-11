@@ -58,3 +58,115 @@ void store_capregval(AddressSpace *as, CPURISCVState *env, hwaddr addr, capregva
         cap_mem_map_remove(&env->cm_map, addr);
     }
 }
+
+static inline void swap_int64(AddressSpace *as, CPURISCVState *env, hwaddr addr, uint64_t *v) {
+    MemTxResult res;
+    MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
+    assert(!(addr & 7));
+    uint64_t tmp;
+    tmp = address_space_ldq(as, addr, attrs, &res);
+    address_space_stq(as, addr, *v, attrs, &res);
+    *v = tmp;
+}
+
+static inline void swap_pc(AddressSpace *as, CPURISCVState *env, hwaddr addr, hwaddr pc_cursor) {
+    capregval_t loaded_val;
+    load_capregval(as, env, addr, &loaded_val);
+    // doesn't have to be a capability
+    // assert(loaded_val.tag);
+    env->pc_cap.bounds.cursor = pc_cursor;
+    store_cap(as, env, addr, &env->pc_cap);
+    env->pc_cap = loaded_val.val.cap;
+    env->pc = loaded_val.val.cap.bounds.cursor;
+}
+
+#define CAPSTONE_CAP_SIZE 16
+#define CAPSTONE_INT64_SIZE 8
+
+#define SWAP_CAP(x) do { swap_capregval(as, env, base_addr, &env->x); \
+                    base_addr += CAPSTONE_CAP_SIZE; } while(0)
+#define SWAP_INT64(x) do { swap_int64(as, env, base_addr, &env->x); \
+                    base_addr += CAPSTONE_INT64_SIZE; } while(0)
+
+void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_addr, hwaddr pc_cursor) {
+    int i;
+
+    // CAPSTONE_DEBUG_PRINT("Domain scoped regs swapping @ 0x%lx\n", base_addr);
+
+    // swap PC
+    swap_pc(as, env, base_addr, pc_cursor);
+    base_addr += CAPSTONE_CAP_SIZE;
+
+    // swap GPRs
+    for(i = 1; i < 32; i ++) {
+        SWAP_CAP(gpr[i]);
+    }
+
+    // swap CCSRs
+    SWAP_CAP(ctvec);
+    SWAP_CAP(cepc);
+    SWAP_CAP(cmmu);
+    SWAP_CAP(cscratch);
+
+    // swap 64-bit CSRs
+    // swap mstatus including the privilege level
+    assert(!((env->mstatus >> 38) & 3)); // the bits are actually unused
+    assert((env->mstatus >> 34) & 3);
+    uint64_t mstatus_priv = env->mstatus | ((uint64_t)env->priv << 38);
+    swap_int64(as, env, base_addr, &mstatus_priv);
+    env->mstatus = mstatus_priv & ~((uint64_t)3 << 38);
+    riscv_cpu_set_mode(env, (mstatus_priv >> 38) & 3);
+    base_addr += CAPSTONE_INT64_SIZE;
+
+    SWAP_INT64(mideleg);
+    SWAP_INT64(medeleg);
+    SWAP_INT64(mip);
+    SWAP_INT64(mie);
+    SWAP_INT64(mcause);
+    SWAP_INT64(mtval);
+    SWAP_INT64(mtval2);
+    SWAP_INT64(mtinst);
+    SWAP_INT64(stvec);
+    SWAP_INT64(scause);
+    SWAP_INT64(stval);
+    SWAP_INT64(sepc);
+    SWAP_INT64(sscratch);
+    SWAP_INT64(satp);
+    SWAP_INT64(offsetmmu);
+
+    assert((env->mstatus >> 34) & 3);
+
+    tlb_flush(env_cpu(env)); // because satp has been changed
+
+    QEMU_IOTHREAD_LOCK_GUARD(); // TODO: is this the right place?
+    riscv_cpu_check_interrupts(env);
+}
+
+void swap_c_effective_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_addr, hwaddr pc_cursor) {
+    // CAPSTONE_DEBUG_PRINT("C-effective regs swapping @ 0x%lx\n", base_addr);
+
+    // swap PC
+    swap_pc(as, env, base_addr, pc_cursor);
+    base_addr += CAPSTONE_CAP_SIZE;
+
+    // swap CCSRs
+    SWAP_CAP(ctvec);
+    SWAP_CAP(cscratch);
+    
+    assert((env->mstatus >> 34) & 3);
+
+    // swap 64-bit CSRs
+    SWAP_INT64(mstatus);
+    SWAP_INT64(mideleg);
+    SWAP_INT64(medeleg);
+    SWAP_INT64(mip);
+    SWAP_INT64(mie);
+
+    assert((env->mstatus >> 34) & 3);
+
+    QEMU_IOTHREAD_LOCK_GUARD(); // TODO: is this the right place?
+    riscv_cpu_check_interrupts(env);
+}
+
+#undef SWAP_INT64
+#undef SWAP_CAP

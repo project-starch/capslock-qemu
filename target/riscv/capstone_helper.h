@@ -31,5 +31,8 @@ static inline void pc_redirect_to_capregval(CPURISCVState *env, capregval_t* v) 
     }
 }
 
+void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_addr, hwaddr pc_cursor);
+void swap_c_effective_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_addr, hwaddr pc_cursor);
+
 
 #endif
