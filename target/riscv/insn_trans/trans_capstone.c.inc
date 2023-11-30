@@ -48,6 +48,14 @@ static bool trans_csshrink(DisasContext *ctx, arg_csshrink *a) {
     return true;
 }
 
+static bool trans_csshrinkto(DisasContext *ctx, arg_csshrinkto *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    TCGv imm = tcg_constant_tl(a->imm);
+    gen_helper_csshrinkto(cpu_env, rd, rs1, imm);
+    return true;
+}
+
 static bool trans_cssplit(DisasContext *ctx, arg_cssplit *a) {
     TCGv_i32 rd = tcg_constant_i32(a->rd);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);

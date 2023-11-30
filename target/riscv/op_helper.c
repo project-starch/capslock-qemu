@@ -698,6 +698,21 @@ void helper_csshrink(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
     }
 }
 
+void helper_csshrinkto(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t size) {
+    capregval_t* rd_v = &env->gpr[rd];
+    capregval_t* rs1_v = &env->gpr[rs1];
+
+    assert(rs1_v->tag);
+    assert(rs1_v->val.cap.type == CAP_TYPE_LIN || rs1_v->val.cap.type == CAP_TYPE_NONLIN ||
+           rs1_v->val.cap.type == CAP_TYPE_UNINIT);
+    assert(rs1_v->val.cap.bounds.cursor >= rs1_v->val.cap.bounds.base &&
+            rs1_v->val.cap.bounds.cursor + size <= rs1_v->val.cap.bounds.end);
+    
+    *rd_v = *rs1_v;
+    rd_v->val.cap.bounds.base = rd_v->val.cap.bounds.cursor;
+    rd_v->val.cap.bounds.end = rd_v->val.cap.bounds.cursor + size;
+}
+
 void helper_cssplit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
     capregval_t* rd_v = &env->gpr[rd];
     capregval_t* rs1_v = &env->gpr[rs1];
