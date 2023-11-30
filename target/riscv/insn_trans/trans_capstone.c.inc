@@ -122,15 +122,16 @@ static bool trans_csldc(DisasContext *ctx, arg_csldc *a) {
 static bool trans_csstc(DisasContext *ctx, arg_csstc *a) {
     if (disas_context_in_c_mode(ctx)) {
         TCGv addr = tcg_temp_new();
+        TCGv check_tag = tcg_temp_new();
         TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
         TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
         TCGv imm = tcg_constant_tl(a->imm);
         TCGv_i32 memop_v = tcg_constant_i32((int)MO_TEUO);
 
-        gen_helper_compress_cap(cpu_env, rs2);
+        gen_helper_compress_cap(check_tag, cpu_env, rs2);
         gen_helper_store_with_cap(addr, cpu_env, rs1, imm, memop_v);
 
-        gen_helper_set_cap_mem_map(cpu_env, addr);
+        gen_helper_set_cap_mem_map(cpu_env, addr, check_tag);
 
         tcg_gen_qemu_st_tl(cap_compress_result_lo, addr, ctx->mem_idx, MO_TEUQ);
         tcg_gen_addi_tl(addr, addr, 8);

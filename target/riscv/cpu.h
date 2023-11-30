@@ -390,6 +390,7 @@ struct CPUArchState {
     cap_mem_map_t cm_map; /* maintains locations of capabilities in memory */
 
     target_ulong cap_compress_result_lo, cap_compress_result_hi; /* low and high of capability compression */
+    bool load_is_cap; /* whether the load result is a capability */
 
 #ifdef CONFIG_KVM
     /* kvm timer */
@@ -436,6 +437,7 @@ static inline int riscv_has_ext(CPURISCVState *env, target_ulong ext)
 
 extern const char * const riscv_int_regnames[];
 extern const char * const riscv_int_regnamesh[];
+extern const char * const riscv_int_regnames_tags[];
 extern const char * const riscv_fpr_regnames[];
 
 const char *riscv_cpu_get_trap_name(target_ulong cause, bool async);

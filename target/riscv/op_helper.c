@@ -875,13 +875,12 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64
         // accessing capabilities in memory, extra checks needed
         // check alignment
         if(addr & 15) {
-            CAPSTONE_DEBUG_PRINT("Unaligned cap access\n");
+            CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
             riscv_raise_exception(env, RISCV_EXCP_LOAD_ADDR_MIS, GETPC());
         }
         // for load, we need to make sure it's a capability
-        if(!is_store && !cap_mem_map_query(&env->cm_map, addr)) {
-            CAPSTONE_DEBUG_PRINT("Attempting to load a non-capability as a capability\n");
-            riscv_raise_exception(env, RISCV_EXCP_LOAD_ACCESS_FAULT, GETPC());
+        if(!is_store) {
+            env->load_is_cap = cap_mem_map_query(&env->cm_map, addr);
         }
     }
 
@@ -906,27 +905,33 @@ uint64_t helper_store_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, u
 }
 
 void helper_reg_set_cap_compressed(CPURISCVState *env, uint32_t rd, uint64_t i64_lo, uint64_t i64_hi) {
-    CAPSTONE_DEBUG_PRINT("uncompressing capability to reg %u\n", rd);
+    // CAPSTONE_DEBUG_PRINT("uncompressing capability to reg %u\n", rd);
     capregval_t* rd_v = &env->gpr[rd];
     cap_uncompress(i64_lo, i64_hi, &rd_v->val.cap);
-    rd_v->tag = true;
+    rd_v->tag = env->load_is_cap;
 }
 
-void helper_compress_cap(CPURISCVState *env, uint32_t reg) {
-    CAPSTONE_DEBUG_PRINT("compressing capability in reg %u\n", reg);
+uint64_t helper_compress_cap(CPURISCVState *env, uint32_t reg) {
+    // CAPSTONE_DEBUG_PRINT("compressing capability in reg %u\n", reg);
     capregval_t* reg_v = &env->gpr[reg];
     
     if(!reg_v->tag) {
-        CAPSTONE_DEBUG_PRINT("attempting to compress non-capability %lx\n", reg_v->val.scalar);
-        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+        // CAPSTONE_DEBUG_PRINT("attempting to compress non-capability %lx\n", reg_v->val.scalar);
+        // riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+        env->cap_compress_result_lo = reg_v->val.scalar;
+        env->cap_compress_result_hi = 0;
+        return 0;
     }
 
     cap_compress(&reg_v->val.cap, &env->cap_compress_result_lo, &env->cap_compress_result_hi);
+    return 1;
 }
 
 /* set tag bit for address */
-void helper_set_cap_mem_map(CPURISCVState *env, uint64_t addr) {
-    cap_mem_map_add(&env->cm_map, addr);
+void helper_set_cap_mem_map(CPURISCVState *env, uint64_t addr, uint64_t to_set) {
+    if (to_set) {
+        cap_mem_map_add(&env->cm_map, addr);
+    }
 }
 
 void helper_remove_cap_mem_map(CPURISCVState *env, uint64_t addr, uint32_t memop) {

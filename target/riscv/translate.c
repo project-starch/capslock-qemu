@@ -41,6 +41,7 @@
 
 /* global register indices */
 static TCGv cpu_gpr[32], cpu_gprh[32], cpu_pc, cpu_vl, cpu_vstart;
+static TCGv_i32 cpu_gpr_tag[32];
 static TCGv_i64 cpu_fpr[32]; /* assume F and D extensions */
 static TCGv load_res;
 static TCGv load_val;
@@ -854,6 +855,7 @@ static bool gen_arith_imm_fn(DisasContext *ctx, arg_i *a, DisasExtend ext,
 {
     TCGv dest = dest_gpr(ctx, a->rd);
     TCGv src1 = get_gpr(ctx, a->rs1, ext);
+    TCGv_i32 dest_tag = cpu_gpr_tag[a->rd];
 
     if (get_ol(ctx) < MXL_RV128) {
         func(dest, src1, a->imm);
@@ -869,6 +871,10 @@ static bool gen_arith_imm_fn(DisasContext *ctx, arg_i *a, DisasExtend ext,
         f128(dest, desth, src1, src1h, a->imm);
         gen_set_gpr128(ctx, a->rd, dest, desth);
     }
+    if(a->rd != 0) {
+        tcg_gen_movi_i32(dest_tag, 0); // clear the tag
+    }
+
     return true;
 }
 
@@ -1323,9 +1329,11 @@ void riscv_translate_init(void)
 
     for (i = 1; i < 32; i++) {
         cpu_gpr[i] = tcg_global_mem_new(cpu_env,
-            offsetof(CPURISCVState, gpr[i]), riscv_int_regnames[i]);
+            offsetof(CPURISCVState, gpr[i].val), riscv_int_regnames[i]);
         cpu_gprh[i] = tcg_global_mem_new(cpu_env,
             offsetof(CPURISCVState, gprh[i]), riscv_int_regnamesh[i]);
+        cpu_gpr_tag[i] = tcg_global_mem_new_i32(cpu_env,
+            offsetof(CPURISCVState, gpr[i].tag), riscv_int_regnames_tags[i]);
     }
 
     for (i = 0; i < 32; i++) {

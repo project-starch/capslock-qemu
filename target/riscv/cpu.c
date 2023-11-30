@@ -179,6 +179,16 @@ const char * const riscv_int_regnames[] = {
     "x28/t3",  "x29/t4", "x30/t5", "x31/t6"
 };
 
+
+const char * const riscv_int_regnames_tags[] = {
+    "x0t/zerot", "x1t/rat",  "x2t/spt",  "x3t/gpt",  "x4t/tpt",  "x5t/t0t",   "x6t/t1t",
+    "x7t/t2t",   "x8t/s0t",  "x9t/s1t",  "x10t/a0t", "x11t/a1t", "x12t/a2t",  "x13t/a3t",
+    "x14t/a4t",  "x15t/a5t", "x16t/a6t", "x17t/a7t", "x18t/s2t", "x19t/s3t",  "x20t/s4t",
+    "x21t/s5t",  "x22t/s6t", "x23t/s7t", "x24t/s8t", "x25t/s9t", "x26t/s10t", "x27t/s11t",
+    "x28t/t3t",  "x29t/t4t", "x30t/t5t", "x31t/t6t"
+};
+
+
 const char * const riscv_int_regnamesh[] = {
     "x0h/zeroh", "x1h/rah",  "x2h/sph",   "x3h/gph",   "x4h/tph",  "x5h/t0h",
     "x6h/t1h",   "x7h/t2h",  "x8h/s0h",   "x9h/s1h",   "x10h/a0h", "x11h/a1h",
