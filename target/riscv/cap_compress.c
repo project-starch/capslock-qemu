@@ -66,7 +66,7 @@ void cap_compress(capfat_t *cap_fat, uint64_t *res_lo, uint64_t *res_hi) {
     t_set(&cc, (T >> 3) & ((1 << 9) - 1));
     iE_set(&cc, iE);
     perms_set(&cc, (uint64_t)cap_fat->perms);
-    ty_set(&cc, (uint64_t)cap_fat->perms);
+    ty_set(&cc, (uint64_t)cap_fat->type);
     revnode_id_set(&cc, 0);
 
     *res_lo = cc.cursor;

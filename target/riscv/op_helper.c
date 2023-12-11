@@ -1107,7 +1107,8 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     capregval_t* rs1_v = &env->gpr[rs1];
     if(rs1_v->tag) {
         // only printing the bounds for now
-        CAPSTONE_DEBUG_PRINT("Print = Cap(0x%lx, 0x%lx, 0x%lx)\n",
+        CAPSTONE_DEBUG_PRINT("Print = Cap(%d, 0x%lx, 0x%lx, 0x%lx)\n",
+                            rs1_v->val.cap.type,
                             rs1_v->val.cap.bounds.cursor,
                             rs1_v->val.cap.bounds.base,
                             rs1_v->val.cap.bounds.end);
