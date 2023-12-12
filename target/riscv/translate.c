@@ -393,6 +393,8 @@ static TCGv dest_gprh(DisasContext *ctx, int reg_num)
 static void gen_set_gpr(DisasContext *ctx, int reg_num, TCGv t)
 {
     if (reg_num != 0) {
+        TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
+        tcg_gen_movi_i32(dest_tag, 0); // clear the tag
         switch (get_ol(ctx)) {
         case MXL_RV32:
             tcg_gen_ext32s_tl(cpu_gpr[reg_num], t);
@@ -855,7 +857,6 @@ static bool gen_arith_imm_fn(DisasContext *ctx, arg_i *a, DisasExtend ext,
 {
     TCGv dest = dest_gpr(ctx, a->rd);
     TCGv src1 = get_gpr(ctx, a->rs1, ext);
-    TCGv_i32 dest_tag = cpu_gpr_tag[a->rd];
 
     if (get_ol(ctx) < MXL_RV128) {
         func(dest, src1, a->imm);
@@ -870,9 +871,6 @@ static bool gen_arith_imm_fn(DisasContext *ctx, arg_i *a, DisasExtend ext,
 
         f128(dest, desth, src1, src1h, a->imm);
         gen_set_gpr128(ctx, a->rd, dest, desth);
-    }
-    if(a->rd != 0) {
-        tcg_gen_movi_i32(dest_tag, 0); // clear the tag
     }
 
     return true;
