@@ -351,6 +351,12 @@ target_ulong helper_mret(CPURISCVState *env)
     if ((env->priv_ver >= PRIV_VERSION_1_12_0) && (prev_priv != PRV_M)) {
         mstatus = set_field(mstatus, MSTATUS_MPRV, 0);
     }
+    if (env->cap_mem && prev_priv != PRV_M && !env->ctvec.tag) {
+        uint64_t ctvec_addr = env->ctvec.val.scalar;
+        env->ctvec.val.cap = env->pc_cap;
+        env->ctvec.val.cap.bounds.cursor = ctvec_addr;
+        env->ctvec.tag = true;
+    }
     env->mstatus = mstatus;
     riscv_cpu_set_mode(env, prev_priv);
 
