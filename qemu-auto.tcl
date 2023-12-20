@@ -9,9 +9,15 @@ interact {
     }
 }
 
-expect "# "
-send "$argv\r"
+interact {
+    -o "# " {
+        send "$argv\r"
+        return
+    }
+}
 
-expect "# "
-send "poweroff -f\r"
-
+interact {
+    -o "# " {
+        send "poweroff -f\r"
+    }
+}
