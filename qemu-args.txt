@@ -1,7 +1,11 @@
 -M virt-capstone -nographic
--bios buildroot/output/images/fw_jump.elf
--kernel buildroot/output/images/Image
+-bios ../captainer-buildroot/build/images/fw_jump.elf
+-kernel ../captainer-buildroot/build/images/Image
 -append 'root=/dev/vda ro'
--drive file=buildroot/output/images/rootfs.ext2,format=raw,id=hd0
+-drive file=../captainer-buildroot/build/images/rootfs.ext2,format=raw,id=hd0
 -device virtio-blk-device,drive=hd0
+-chardev stdio,mux=on,id=ch0,signal=on
+-mon chardev=ch0,mode=readline
+-serial chardev:ch0
+-serial chardev:ch0
 -cpu rv64,sstc=false,h=false

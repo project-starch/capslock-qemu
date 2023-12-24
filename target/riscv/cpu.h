@@ -391,6 +391,7 @@ struct CPUArchState {
 
     target_ulong cap_compress_result_lo, cap_compress_result_hi; /* low and high of capability compression */
     bool load_is_cap; /* whether the load result is a capability */
+    capboundsfat_t load_cap_bounds;
 
 #ifdef CONFIG_KVM
     /* kvm timer */

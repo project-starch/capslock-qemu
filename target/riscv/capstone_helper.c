@@ -25,18 +25,20 @@ void store_cap(AddressSpace *as, CPURISCVState *env, hwaddr addr, capfat_t *cap)
     cap_compress(cap, &lo, &hi);
     address_space_stq(as, addr, lo, attrs, &res);
     address_space_stq(as, addr + 8, hi, attrs, &res);
-    cap_mem_map_add(&env->cm_map, addr);
+    cap_mem_map_add(&env->cm_map, addr, &cap->bounds);
 }
 
 void load_capregval(AddressSpace *as, CPURISCVState *env, hwaddr addr, capregval_t *v) {
     MemTxResult res;
     MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
     uint64_t lo, hi;
-    if(cap_mem_map_query(&env->cm_map, addr)) {
+    capboundsfat_t bounds;
+    if(cap_mem_map_query(&env->cm_map, addr, &bounds)) {
         lo = address_space_ldq(as, addr, attrs, &res);
         hi = address_space_ldq(as, addr + 8, attrs, &res);
         v->tag = true;
         cap_uncompress(lo, hi, &v->val.cap);
+        memcpy(&v->val.cap.bounds, &bounds, sizeof(capboundsfat_t));
     } else {
         v->tag = false;
         v->val.scalar = address_space_ldq(as, addr, attrs, &res);
@@ -52,7 +54,7 @@ void store_capregval(AddressSpace *as, CPURISCVState *env, hwaddr addr, capregva
         cap_compress(&v->val.cap, &lo, &hi);
         address_space_stq(as, addr, lo, attrs, &res);
         address_space_stq(as, addr + 8, hi, attrs, &res);
-        cap_mem_map_add(&env->cm_map, addr);
+        cap_mem_map_add(&env->cm_map, addr, &v->val.cap.bounds);
     } else {
         address_space_stq(as, addr, v->val.scalar, attrs, &res);
         cap_mem_map_remove(&env->cm_map, addr);

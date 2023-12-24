@@ -139,7 +139,7 @@ static bool trans_csstc(DisasContext *ctx, arg_csstc *a) {
         gen_helper_compress_cap(check_tag, cpu_env, rs2);
         gen_helper_store_with_cap(addr, cpu_env, rs1, imm, memop_v);
 
-        gen_helper_set_cap_mem_map(cpu_env, addr, check_tag);
+        gen_helper_set_cap_mem_map(cpu_env, rs2, addr, check_tag);
 
         tcg_gen_qemu_st_tl(cap_compress_result_lo, addr, ctx->mem_idx, MO_TEUQ);
         tcg_gen_addi_tl(addr, addr, 8);

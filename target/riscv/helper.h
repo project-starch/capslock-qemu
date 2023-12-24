@@ -1204,7 +1204,7 @@ DEF_HELPER_4(store_with_cap, tl, env, i32, tl, i32)
 DEF_HELPER_4(reg_set_cap_compressed, void, env, i32, tl, tl)
 
 DEF_HELPER_2(compress_cap, tl, env, i32)
-DEF_HELPER_3(set_cap_mem_map, void, env, tl, tl)
+DEF_HELPER_4(set_cap_mem_map, void, env, i32, tl, tl)
 DEF_HELPER_3(remove_cap_mem_map, void, env, tl, i32)
 
 DEF_HELPER_4(cjalr_switch_caps, void, env, i32, i32, tl)

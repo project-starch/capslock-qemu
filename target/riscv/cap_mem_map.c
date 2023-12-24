@@ -18,10 +18,12 @@ static inline unsigned addr_get_entry_offset(cap_mem_map_addr_t addr) {
     return (unsigned)((addr & 4095) >> 4);
 }
 
-static inline void set_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset) {
+static inline void set_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset, capboundsfat_t *bounds) {
+    assert(offset < 256);
     unsigned idx = offset >> 6;
     unsigned bidx = offset & 63;
     entry->map[idx] |= (uint64_t)1 << bidx;
+    memcpy(&entry->bounds[offset], bounds, sizeof(capboundsfat_t));
 }
 
 static inline void clear_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset) {
@@ -30,9 +32,11 @@ static inline void clear_entry_at_offset(struct CapMemMapEntry *entry, unsigned 
     entry->map[idx] &= ~((uint64_t)1 << bidx);
 }
 
-static inline bool get_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset) {
+static inline bool get_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset, capboundsfat_t *bounds_out) {
+    assert(offset < 256);
     unsigned idx = offset >> 6;
     unsigned bidx = offset & 63;
+    memcpy(bounds_out, &entry->bounds[offset], sizeof(capboundsfat_t));
     return ((entry->map[idx] >> bidx) & 1) != 0;
 }
 
@@ -55,14 +59,14 @@ static struct CapMemMapEntry* add_entry(cap_mem_map_t *cm_map, cap_mem_map_addr_
     return entry;
 }
 
-void cap_mem_map_add(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
+void cap_mem_map_add(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, capboundsfat_t *bounds) {
     if(addr_is_aligned(addr)) {
         struct CapMemMapEntry *entry = find_entry(cm_map, addr);
         if(!entry) {
             entry = add_entry(cm_map, addr);
         }
         unsigned offset = addr_get_entry_offset(addr);
-        set_entry_at_offset(entry, offset);
+        set_entry_at_offset(entry, offset, bounds);
     }
 }
 
@@ -84,12 +88,12 @@ void cap_mem_map_remove_range(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, un
     }
 }
 
-bool cap_mem_map_query(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
+bool cap_mem_map_query(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, capboundsfat_t *bounds_out) {
     if(addr_is_aligned(addr)) {
         struct CapMemMapEntry *entry = find_entry(cm_map, addr);
         if(entry) {
             unsigned offset = addr_get_entry_offset(addr);
-            return get_entry_at_offset(entry, offset);
+            return get_entry_at_offset(entry, offset, bounds_out);
         } else {
             return false;
         }
