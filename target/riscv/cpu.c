@@ -417,17 +417,7 @@ static void rv64_base_cpu_init(Object *obj)
     env->cih.tag = false;
     env->cepc.tag = false;
     env->cscratch.tag = false;
-
-    env->cmmu.tag = true;
-    env->cmmu.val.cap.bounds.cursor = 0x0;
-    env->cmmu.val.cap.bounds.base = 0x0;
-    env->cmmu.val.cap.bounds.end = 0x8000000000000ULL;
-    env->cmmu.val.cap.perms = CAP_PERMS_RWX;
-
-    env->pc_cap.bounds.cursor = 0x0;
-    env->pc_cap.bounds.base = 0x0;
-    env->pc_cap.bounds.end = 0x8000000000000ULL;
-    env->pc_cap.perms = CAP_PERMS_RWX;
+    env->cmmu.tag = false;
 
     cap_mem_map_init(&env->cm_map);
 }

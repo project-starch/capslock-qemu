@@ -128,7 +128,7 @@ struct TCGCPUOps {
                      bool probe, uintptr_t retaddr);
 
     bool (*pre_mem_access)(CPUState* cpu, hwaddr physaddr, int size,
-        MMUAccessType access_type);
+        MMUAccessType access_type, uintptr_t retaddr);
 
     /**
      * @do_transaction_failed: Callback for handling failed memory transactions

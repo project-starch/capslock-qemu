@@ -1881,7 +1881,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             env->pc = (env->mtvec >> 2 << 2) +
                     ((async && (env->mtvec & 3) == 1) ? cause * 4 : 0);
             riscv_cpu_set_mode(env, PRV_M);
-         }
+        }
    }
 
     /*
@@ -1898,22 +1898,49 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 }
 
 
-bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessType access_type) {
+bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessType access_type, uintptr_t retaddr) {
+    bool access_allowed;
     CPURISCVState* env = cs->env_ptr;
-    capperms_t access = CAP_PERMS_NA;
-    switch(access_type) {
-        case MMU_DATA_LOAD:
-        case MMU_CAP_DATA_LOAD:
-            access = CAP_PERMS_RO;
-            break;
-        case MMU_DATA_STORE:
-        case MMU_CAP_DATA_STORE:
-            access = CAP_PERMS_WO;
-            break;
-        case MMU_INST_FETCH:
-        case MMU_CAP_INST_FETCH:
-            access = CAP_PERMS_XO;
-            break;
+    if(!env->cap_mem || env->priv == PRV_C)
+        access_allowed = true;
+    else {
+        capperms_t access = CAP_PERMS_NA;
+        switch(access_type) {
+            case MMU_DATA_LOAD:
+            case MMU_CAP_DATA_LOAD:
+                access = CAP_PERMS_RO;
+                break;
+            case MMU_DATA_STORE:
+            case MMU_CAP_DATA_STORE:
+                access = CAP_PERMS_WO;
+                break;
+            case MMU_INST_FETCH:
+            case MMU_CAP_INST_FETCH:
+                access = CAP_PERMS_XO;
+                break;
+        }
+        access_allowed = capreg_allow_access(&env->cmmu, (capaddr_t)physaddr, (capaddr_t)size, access);
     }
-    return capreg_allow_access(&env->cmmu, (capaddr_t)physaddr, (capaddr_t)size, access);
+    if(!access_allowed) {
+        // set up exception
+        switch(access_type) {
+            case MMU_DATA_LOAD:
+            case MMU_CAP_DATA_LOAD:
+                cs->exception_index = RISCV_EXCP_LOAD_ACCESS_FAULT;
+                break;
+            case MMU_DATA_STORE:
+            case MMU_CAP_DATA_STORE:
+                cs->exception_index = RISCV_EXCP_STORE_AMO_ACCESS_FAULT;
+                break;
+            case MMU_INST_FETCH:
+            case MMU_CAP_INST_FETCH:
+                cs->exception_index = RISCV_EXCP_INST_ACCESS_FAULT;
+                break;
+            default:
+                g_assert_not_reached();
+        }
+        env->badaddr = physaddr;
+        cpu_loop_exit_restore(cs, retaddr);
+    }
+    return access_allowed;
 }

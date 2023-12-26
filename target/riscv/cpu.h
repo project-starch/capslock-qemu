@@ -472,7 +472,7 @@ void riscv_cpu_list(void);
 void riscv_cpu_validate_set_extensions(RISCVCPU *cpu, Error **errp);
 
 
-bool capstone_pre_mem_access(CPUState* cs, hwaddr phys_addr, int size, MMUAccessType access_type);
+bool capstone_pre_mem_access(CPUState* cs, hwaddr phys_addr, int size, MMUAccessType access_type, uintptr_t retaddr);
 
 #define cpu_list riscv_cpu_list
 #define cpu_mmu_index riscv_cpu_mmu_index
