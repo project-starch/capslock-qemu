@@ -956,6 +956,8 @@ void helper_set_cap_mem_map(CPURISCVState *env, uint32_t reg, uint64_t addr, uin
     capregval_t* reg_v = &env->gpr[reg];
     if (to_set) {
         cap_mem_map_add(&env->cm_map, addr, &reg_v->val.cap.bounds);
+    } else {
+        cap_mem_map_remove(&env->cm_map, addr);
     }
 }
 
