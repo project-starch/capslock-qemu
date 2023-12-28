@@ -69,7 +69,12 @@ void cap_compress(capfat_t *cap_fat, uint64_t *res_lo, uint64_t *res_hi) {
     ty_set(&cc, (uint64_t)cap_fat->type);
     revnode_id_set(&cc, 0);
 
-    *res_lo = cc.cursor;
+    /* FIXME: a hack to keep async */
+    if(cap_fat->type == CAP_TYPE_SEALEDRET || cap_fat->type == CAP_TYPE_SEALEDRET) {
+        *res_lo = cap_fat->async | (cap_fat->reg << 1);
+    } else {
+        *res_lo = cc.cursor;
+    }
     *res_hi = cc.other;
 }
 
@@ -112,10 +117,16 @@ void cap_uncompress(uint64_t lo, uint64_t hi, capfat_t *out) {
     else if(A3 < R && B3 >= R)
         b -= (uint64_t)1 << (E + 14);
 
-    out->async = CAP_ASYNC_SYNC;
     out->type = (captype_t)ty_get(&cc);
+    // FIXME: a hack
+    if(out->type == CAP_TYPE_SEALEDRET) {
+        out->async = (capasync_t)(lo & 1);
+        out->reg = (reg_idx_t)(lo >> 1);
+    } else {
+        out->async = CAP_ASYNC_SYNC;
+        out->reg = 0;
+    }
     out->perms = (capperms_t)perms_get(&cc);
-    out->reg = 0;
     out->bounds.cursor = cc.cursor;
     out->bounds.base = b;
     out->bounds.end = t;
