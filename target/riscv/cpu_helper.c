@@ -1761,7 +1761,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
         capaddr_t base_addr = env->cih.val.cap.bounds.base;
 
-        swap_domain_scoped_regs(cs->as, env, base_addr, env->pc);
+        swap_domain_scoped_regs(cs->as, env, base_addr, env->pc, DOM_SCOPED_SWAP_OUT);
 
         env->cih.val.cap.type = CAP_TYPE_SEALEDRET;
         env->cih.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;

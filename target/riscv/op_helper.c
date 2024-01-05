@@ -1057,12 +1057,15 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
             riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
         }
 
-        if(rd_v->val.cap.type != CAP_TYPE_SEALEDRET) {
+        if(rd_v->val.cap.type != CAP_TYPE_SEALEDRET && rd_v->val.cap.type != CAP_TYPE_SEALED) {
             CAPSTONE_DEBUG_PRINT("Return requires a sealed-return capability\n");
             riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, GETPC());
         }
 
         capfat_t rd_cap = rd_v->val.cap;
+        if(rd_cap.type == CAP_TYPE_SEALED) {
+            rd_cap.reg = 0;
+        }
         capaddr_t base_addr = rd_cap.bounds.base;
         uint64_t rs2_val = rs2_v->val.scalar;
 
@@ -1088,7 +1091,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
                 capregval_set_cap(&env->cih, &rd_cap);
                 *rd_v = CAPREGVAL_NULL;
 
-                swap_domain_scoped_regs(cs->as, env, base_addr, rs1_v->val.scalar);
+                swap_domain_scoped_regs(cs->as, env, base_addr, rs1_v->val.scalar, DOM_SCOPED_SWAP_IN);
 
                 // post the interrupts
                 QEMU_IOTHREAD_LOCK_GUARD();

@@ -90,7 +90,8 @@ static inline void swap_pc(AddressSpace *as, CPURISCVState *env, hwaddr addr, hw
 #define SWAP_INT64(x) do { swap_int64(as, env, base_addr, &env->x); \
                     base_addr += CAPSTONE_INT64_SIZE; } while(0)
 
-void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_addr, hwaddr pc_cursor) {
+void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_addr, hwaddr pc_cursor,
+        enum domain_scoped_swap_mode mode) {
     int i;
 
     // CAPSTONE_DEBUG_PRINT("Domain scoped regs swapping @ 0x%lx\n", base_addr);
@@ -120,8 +121,7 @@ void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_a
     SWAP_INT64(mip);
     SWAP_INT64(mie);
 
-    // above is identical to C-scoped regs
-    
+    // TODO: handle differently based on mode
     SWAP_INT64(offsetmmu);
     SWAP_CAP(cmmu);
     SWAP_CAP(cepc);
@@ -142,6 +142,8 @@ void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_a
     SWAP_INT64(sscratch);
     SWAP_INT64(satp);
 
+    // above is identical to C-scoped regs
+    
     tlb_flush(env_cpu(env)); // because satp has been changed
 
     QEMU_IOTHREAD_LOCK_GUARD(); // TODO: is this the right place?
