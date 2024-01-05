@@ -99,18 +99,12 @@ void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_a
     swap_pc(as, env, base_addr, pc_cursor);
     base_addr += CAPSTONE_CAP_SIZE;
 
-    // swap GPRs
-    for(i = 1; i < 32; i ++) {
-        SWAP_CAP(gpr[i]);
-    }
-
     // swap CCSRs
     SWAP_CAP(ctvec);
-    SWAP_CAP(cepc);
-    SWAP_CAP(cmmu);
     SWAP_CAP(cscratch);
 
     // swap 64-bit CSRs
+
     // swap mstatus including the privilege level
     assert(!((env->mstatus >> 38) & 3)); // the bits are actually unused
     assert((env->mstatus >> 34) & 3);
@@ -120,10 +114,23 @@ void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_a
     riscv_cpu_set_mode(env, (mstatus_priv >> 38) & 3);
     base_addr += CAPSTONE_INT64_SIZE;
 
+    // swap 64-bit CSRs
     SWAP_INT64(mideleg);
     SWAP_INT64(medeleg);
     SWAP_INT64(mip);
     SWAP_INT64(mie);
+
+    // above is identical to C-scoped regs
+    
+    SWAP_INT64(offsetmmu);
+    SWAP_CAP(cmmu);
+    SWAP_CAP(cepc);
+
+    // swap GPRs
+    for(i = 1; i < 32; i ++) {
+        SWAP_CAP(gpr[i]);
+    }
+
     SWAP_INT64(mcause);
     SWAP_INT64(mtval);
     SWAP_INT64(mtval2);
@@ -134,9 +141,6 @@ void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_a
     SWAP_INT64(sepc);
     SWAP_INT64(sscratch);
     SWAP_INT64(satp);
-    SWAP_INT64(offsetmmu);
-
-    assert((env->mstatus >> 34) & 3);
 
     tlb_flush(env_cpu(env)); // because satp has been changed
 

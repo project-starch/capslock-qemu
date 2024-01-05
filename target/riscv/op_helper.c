@@ -998,8 +998,15 @@ void helper_set_pc_cap(CPURISCVState *env, uint32_t reg) {
 
 
 void helper_cscall(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+    assert(rd == rs1);
+
     CPUState *cs = env_cpu(env);
-    capregval_t* rs1_v = &env->gpr[rs1];
+    capregval_t* rs1_v;
+    if(rs1 == 0) {
+        rs1_v = &env->cih;
+    } else {
+        rs1_v = &env->gpr[rs1];
+    }
     
     if(!rs1_v->tag) {
         CAPSTONE_DEBUG_PRINT("Call requires a capability\n");
@@ -1013,6 +1020,7 @@ void helper_cscall(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     }
 
     capfat_t rs1_val = rs1_v->val.cap;
+    rs1_v->tag = false; /* always linear */
 
     swap_c_effective_regs(cs->as, env, rs1_val.bounds.base, env->pc);
 
@@ -1065,8 +1073,13 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
                 swap_c_effective_regs(cs->as, env, base_addr, rs1_v->val.scalar);
 
                 // write return reg
-                capregval_set_cap(&env->gpr[rd_cap.reg], &rd_cap);
-                env->gpr[rd_cap.reg].val.cap.type = CAP_TYPE_SEALED;
+                if(rd_cap.reg == 0) {
+                    capregval_set_cap(&env->cih, &rd_cap);
+                    env->cih.val.cap.type = CAP_TYPE_SEALED;
+                } else {
+                    capregval_set_cap(&env->gpr[rd_cap.reg], &rd_cap);
+                    env->gpr[rd_cap.reg].val.cap.type = CAP_TYPE_SEALED;
+                }
 
                 break;
             case CAP_ASYNC_ASYNC:
