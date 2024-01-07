@@ -425,9 +425,7 @@ static int riscv_cpu_local_irq_pending(CPURISCVState *env)
     int virq;
     uint64_t irqs, pending, mie, hsie, vsie;
 
-    if(env->cap_mem
-        && env->priv < PRV_C /* TODO: a hack */
-    ) {
+    if(env->cap_mem) {
         /* Check H-interrupts */
         /* H-interrupts take precedence over V-interrupts */
 
@@ -1749,7 +1747,6 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                   __func__, env->mhartid, async, cause, env->pc, tval,
                   riscv_cpu_get_trap_name(cause, async));
 
-    assert(!env->cap_mem || env->priv < PRV_C); /* TODO: a hack */
     /* Capstone-specific exception/interrupt handling */
     if (async && env->cap_mem && env->cis && capstone_int_can_take(env)) {
         /* handle H-interrupt in C-mode */
@@ -1757,7 +1754,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         // can deliver the exception
         // TODO: need to save more state for S/U modes
 
-        assert(env->priv < PRV_C); /* TODO: a hack */
+        // assert(env->priv < PRV_C); /* TODO: a hack */
 
         capaddr_t base_addr = env->cih.val.cap.bounds.base;
 
