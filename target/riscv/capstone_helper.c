@@ -112,6 +112,7 @@ void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_a
     uint64_t mstatus_priv = env->mstatus | ((uint64_t)env->priv << 38);
     swap_int64(as, env, base_addr, &mstatus_priv);
     env->mstatus = mstatus_priv & ~((uint64_t)3 << 38);
+    // CAPSTONE_DEBUG_PRINT("D %lu %lu %d\n", env->priv, (mstatus_priv >> 38) & 3, env->ctvec.tag);
     riscv_cpu_set_mode(env, (mstatus_priv >> 38) & 3);
     base_addr += CAPSTONE_INT64_SIZE;
 
@@ -161,10 +162,17 @@ void swap_c_effective_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_add
     SWAP_CAP(ctvec);
     SWAP_CAP(cscratch);
     
+    assert(!((env->mstatus >> 38) & 3)); // the bits are actually unused
     assert((env->mstatus >> 34) & 3);
+    uint64_t mstatus_priv = env->mstatus | ((uint64_t)env->priv << 38);
+    swap_int64(as, env, base_addr, &mstatus_priv);
+    env->mstatus = mstatus_priv & ~((uint64_t)3 << 38);
+    // CAPSTONE_DEBUG_PRINT("C %lu %lu %d\n", env->priv, (mstatus_priv >> 38) & 3, env->ctvec.tag);
+    // assert(!(env->priv == 3 && ((mstatus_priv >> 38) & 3) == 0 && !env->ctvec.tag));
+    riscv_cpu_set_mode(env, (mstatus_priv >> 38) & 3);
+    base_addr += CAPSTONE_INT64_SIZE;
 
     // swap 64-bit CSRs
-    SWAP_INT64(mstatus);
     SWAP_INT64(mideleg);
     SWAP_INT64(medeleg);
     SWAP_INT64(mip);

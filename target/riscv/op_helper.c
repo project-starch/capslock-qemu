@@ -1071,14 +1071,27 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
 
         switch(rd_cap.async) {
             case CAP_ASYNC_SYNC:
+                if(rd_cap.reg == 0 && env->cih.tag) {
+                    // cih already contains a capability
+                    // invalid operation
+                    CAPSTONE_DEBUG_PRINT("Return to synchronous sealed-return cap with reg = 0 is only allowed when cih = cnull\n");
+                    riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, GETPC());
+                }
+
                 *rd_v = CAPREGVAL_NULL;
                 
                 swap_c_effective_regs(cs->as, env, base_addr, rs1_v->val.scalar);
 
                 // write return reg
                 if(rd_cap.reg == 0) {
+                    assert(!env->cih.tag);
                     capregval_set_cap(&env->cih, &rd_cap);
                     env->cih.val.cap.type = CAP_TYPE_SEALED;
+                    // also deliver the V-interrupts
+                    
+                    QEMU_IOTHREAD_LOCK_GUARD();
+                    env->mip |= rs2_val;
+                    riscv_cpu_check_interrupts(env);
                 } else {
                     capregval_set_cap(&env->gpr[rd_cap.reg], &rd_cap);
                     env->gpr[rd_cap.reg].val.cap.type = CAP_TYPE_SEALED;
