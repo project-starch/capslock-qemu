@@ -29,6 +29,7 @@
 #include "cap_mem_map.h"
 #include "cap_compress.h"
 #include "capstone_helper.h"
+#include "trace.h"
 
 /* Exceptions processing helpers */
 G_NORETURN void riscv_raise_exception(CPURISCVState *env,
@@ -1022,6 +1023,7 @@ void helper_cscall(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     capfat_t rs1_val = rs1_v->val.cap;
     rs1_v->tag = false; /* always linear */
 
+    trace_capstone_dom_switch_sync();
     swap_c_effective_regs(cs->as, env, rs1_val.bounds.base, env->pc);
 
     // set cra
@@ -1080,6 +1082,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
 
                 *rd_v = CAPREGVAL_NULL;
                 
+                trace_capstone_dom_switch_sync();
                 swap_c_effective_regs(cs->as, env, base_addr, rs1_v->val.scalar);
 
                 // write return reg
@@ -1104,6 +1107,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
                 capregval_set_cap(&env->cih, &rd_cap);
                 *rd_v = CAPREGVAL_NULL;
 
+                trace_capstone_dom_switch_async();
                 swap_domain_scoped_regs(cs->as, env, base_addr, rs1_v->val.scalar, DOM_SCOPED_SWAP_IN);
 
                 // post the interrupts
