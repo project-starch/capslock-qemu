@@ -83,7 +83,6 @@ void tcg_handle_interrupt(CPUState *cpu, int mask)
     g_assert(qemu_mutex_iothread_locked());
 
     cpu->interrupt_request |= mask;
-    cpu->halted = false; /* Fix for Capstone */
 
     /*
      * If called from iothread context, wake the target cpu in
