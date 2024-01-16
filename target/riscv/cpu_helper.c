@@ -657,8 +657,8 @@ void riscv_cpu_check_interrupts(CPURISCVState *env) {
     // if(env->cis & CAPSTONE_CIS_PENDING_MASK) {
     if(env->cis) {
         // we got some pending H-interrupts
-        cpu_interrupt(cs, CPU_INTERRUPT_HARD);
-    } else if(env->mip | vsgein | vstip) {
+                cpu_interrupt(cs, CPU_INTERRUPT_HARD);
+            } else if(env->mip | vsgein | vstip) {
         cpu_interrupt(cs, CPU_INTERRUPT_HARD);
     } else {
         cpu_reset_interrupt(cs, CPU_INTERRUPT_HARD);
@@ -667,6 +667,7 @@ void riscv_cpu_check_interrupts(CPURISCVState *env) {
 
 void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level) {
     // assert(capstone_irq >= 0 && capstone_irq <= CAPSTONE_IRQ_MX);
+    assert(capstone_irq != IRQ_S_TIMER && capstone_irq != IRQ_S_SOFT);
 
     // uint64_t mask = (1 << (capstone_irq << 1));
     uint64_t mask = 1 << capstone_irq;
@@ -679,6 +680,14 @@ void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level) {
 
     env->cis = (env->cis & ~mask_cis) | (value & mask_cis);
     env->mip = (env->mip & ~mask_mip) | (value & mask_mip);
+    
+    // FIXME: a hack to lower supervisor-external
+    if(level == 0 && capstone_irq == IRQ_S_EXT) {
+        env->mip &= ~(uint64_t)MIP_SEIP;
+    }
+
+    trace_capstone_h_int(capstone_irq, level, env->cis, env->mip);
+
     
     riscv_cpu_check_interrupts(env);
 }
@@ -1669,7 +1678,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
     }
 
     if (!async) {
-        /* set tval to badaddr for traps with address information */
+                /* set tval to badaddr for traps with address information */
         switch (cause) {
         case RISCV_EXCP_LOAD_GUEST_ACCESS_FAULT:
         case RISCV_EXCP_STORE_GUEST_AMO_ACCESS_FAULT:
@@ -1758,7 +1767,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
         capaddr_t base_addr = env->cih.val.cap.bounds.base;
 
-        trace_capstone_dom_switch_async();
+        trace_capstone_dom_switch_async(1);
         swap_domain_scoped_regs(cs->as, env, base_addr, env->pc, DOM_SCOPED_SWAP_OUT);
 
         env->cih.val.cap.type = CAP_TYPE_SEALEDRET;
@@ -1809,6 +1818,9 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             }
             env->hstatus = set_field(env->hstatus, HSTATUS_GVA, write_gva);
         }
+
+        if(async)
+            trace_capstone_v_int(cause, PRV_S, env->priv, env->mideleg);
 
         s = env->mstatus;
         s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_SIE));
@@ -1864,6 +1876,11 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             env->mtinst = tinst;
             assert(env->ctvec.tag);
             pc_redirect_to_cap(env, &env->ctvec.val.cap);
+
+            if(async) {
+                trace_capstone_v_int(cause, PRV_C, env->priv, env->mideleg);
+                assert(cause != IRQ_S_EXT);
+            }
             riscv_cpu_set_mode(env, PRV_C);
         } else {
             s = env->mstatus;

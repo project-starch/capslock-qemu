@@ -13,4 +13,6 @@ mseccfg_csr_write(uint64_t mhartid, uint64_t val) "hart %" PRIu64 ": write msecc
 
 # Capstone
 capstone_dom_switch_sync(void) ""
-capstone_dom_switch_async(void)  ""
+capstone_dom_switch_async(uint32_t direction)  "direction = %" PRIu32
+capstone_h_int(uint32_t irq, uint32_t level, uint64_t cis, uint64_t mip) "H-int %" PRIu32 ", lev = %" PRIu32 ", cis = %" PRIx64 ", mip = %" PRIx64
+capstone_v_int(uint32_t irq, uint32_t mode, uint32_t priv_mode, uint64_t mideleg) "V-int %" PRIu32 ", mode = %" PRIu32 ", from = %" PRIu32 ", mideleg = %" PRIx64

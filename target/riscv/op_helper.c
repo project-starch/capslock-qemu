@@ -390,8 +390,10 @@ void helper_wfi(CPURISCVState *env)
                (prv_u || (prv_s && get_field(env->hstatus, HSTATUS_VTW)))) {
         riscv_raise_exception(env, RISCV_EXCP_VIRT_INSTRUCTION_FAULT, GETPC());
     } else {
-        cs->halted = 1;
-        cs->exception_index = EXCP_HLT;
+        // FIXME: the CPU is somehow never waken up with these
+        // NOP is a legal implementation of WFI
+        // cs->halted = 1;
+        // cs->exception_index = EXCP_HLT;
         cpu_loop_exit(cs);
     }
 }
@@ -1107,7 +1109,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
                 capregval_set_cap(&env->cih, &rd_cap);
                 *rd_v = CAPREGVAL_NULL;
 
-                trace_capstone_dom_switch_async();
+                trace_capstone_dom_switch_async(0);
                 swap_domain_scoped_regs(cs->as, env, base_addr, rs1_v->val.scalar, DOM_SCOPED_SWAP_IN);
 
                 // post the interrupts
