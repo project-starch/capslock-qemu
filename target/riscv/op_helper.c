@@ -1124,6 +1124,35 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
     }
 }
 
+void helper_cscapenter(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
+    // enters the capability mode
+    env->cap_mem = true;
+    
+    // generates the genesis capabilities
+    assert(rs1 && rs2); // we do not allow the platform-dependent case for now
+    uint64_t pc_lo_addr = env->gpr[rs1].val.scalar;
+    uint64_t pc_hi_addr = env->gpr[rs2].val.scalar;
+    assert(pc_lo_addr < pc_hi_addr);
+
+    env->pc_cap.bounds.base = pc_lo_addr;
+    env->pc_cap.bounds.end = pc_hi_addr;
+    env->pc_cap.type = CAP_TYPE_LIN;
+    env->pc_cap.perms = CAP_PERMS_RWX;
+
+    env->gpr[10].tag = 1;
+    env->gpr[10].val.cap.bounds.base = 0;
+    env->gpr[10].val.cap.bounds.end = pc_lo_addr;
+    env->gpr[10].val.cap.type = CAP_TYPE_LIN;
+    env->gpr[10].val.cap.perms = CAP_PERMS_RWX;
+
+    env->gpr[11].tag = 1;
+    env->gpr[11].val.cap.bounds.base = pc_hi_addr;
+    env->gpr[11].val.cap.bounds.end = (uint64_t)1 << 63; // TODO: should be 2**64
+    env->gpr[11].val.cap.type = CAP_TYPE_LIN;
+    env->gpr[11].val.cap.perms = CAP_PERMS_RWX;
+}
+
+
 /* helpers for Capstone debug instructions */
 
 void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
@@ -1152,8 +1181,9 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     capregval_t* rs1_v = &env->gpr[rs1];
     if(rs1_v->tag) {
         // only printing the bounds for now
-        CAPSTONE_DEBUG_PRINT("Print = Cap(%d, 0x%lx, 0x%lx, 0x%lx)\n",
+        CAPSTONE_DEBUG_PRINT("Print = Cap(%d, 0x%x, 0x%lx, 0x%lx, 0x%lx)\n",
                             rs1_v->val.cap.type,
+                            rs1_v->val.cap.perms,
                             rs1_v->val.cap.bounds.cursor,
                             rs1_v->val.cap.bounds.base,
                             rs1_v->val.cap.bounds.end);
