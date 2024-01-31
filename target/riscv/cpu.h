@@ -32,6 +32,7 @@
 #include "cpu-qom.h"
 #include "cap.h"
 #include "cap_mem_map.h"
+#include "cap_rev_tree.h"
 
 #define TCG_GUEST_DEFAULT_MO 0
 
@@ -388,6 +389,7 @@ struct CPUArchState {
     bool cap_mem; /* temporary: use capabilities for memory accesses */
 
     cap_mem_map_t cm_map; /* maintains locations of capabilities in memory */
+    cap_rev_tree_t cr_tree; /* capability revocation tree */
 
     target_ulong cap_compress_result_lo, cap_compress_result_hi; /* low and high of capability compression */
     bool load_is_cap; /* whether the load result is a capability */

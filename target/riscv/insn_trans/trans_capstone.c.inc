@@ -40,6 +40,19 @@ static bool trans_cslcc(DisasContext *ctx, arg_cslcc *a) {
     return true;
 }
 
+static bool trans_csrevoke(DisasContext *ctx, arg_csrevoke *a) {
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    gen_helper_csrevoke(cpu_env, rs1);
+    return true;
+}
+
+static bool trans_csmrev(DisasContext *ctx, arg_csmrev *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    gen_helper_csmrev(cpu_env, rd, rs1);
+    return true;   
+}
+
 static bool trans_csshrink(DisasContext *ctx, arg_csshrink *a) {
     TCGv_i32 rd = tcg_constant_i32(a->rd);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);

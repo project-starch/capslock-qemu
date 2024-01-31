@@ -23,6 +23,7 @@ riscv_ss.add(files(
   'zce_helper.c',
   'cap.c',
   'cap_mem_map.c',
+  'cap_rev_tree.c',
   'cap_compress.c',
   'capstone_helper.c',
 ))

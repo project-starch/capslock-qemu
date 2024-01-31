@@ -6,6 +6,7 @@
 #include <assert.h>
 
 typedef uint64_t capaddr_t;
+typedef uint32_t cap_rev_node_id_t;
 
 enum CapPerms {
     CAP_PERMS_NA        = 0x0,
@@ -68,6 +69,7 @@ struct CapFat {
     captype_t type;
     capasync_t async; 
     reg_idx_t reg;
+    cap_rev_node_id_t rev_node_id;
 };
 
 typedef struct CapFat capfat_t;
