@@ -1203,11 +1203,11 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
     cap->async = 0;
     cap->perms = CAP_PERMS_RWX;
     cap->type = CAP_TYPE_LIN;
+    cap->rev_node_id = cap_rev_tree_create_lone_node(&env->cr_tree);
     rd_v->tag = true;
 }
 
 void helper_csdebugoncapmem(CPURISCVState *env, uint64_t rs1_v) {
-    CAPSTONE_DEBUG_PRINT("rs1_v = %lu\n", rs1_v);
     env->cap_mem = rs1_v != 0;
 }
 

@@ -37,6 +37,9 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id);
 /* returns the node id for the new capability */
 cap_rev_node_id_t cap_rev_tree_split(cap_rev_tree_t *tree, cap_rev_node_id_t node_id);
 
+/* creates a new tree with a new node as its root */
+cap_rev_node_id_t cap_rev_tree_create_lone_node(cap_rev_tree_t *tree);
+
 void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_id_t node_id);
 
 inline static bool cap_rev_tree_check_valid(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {

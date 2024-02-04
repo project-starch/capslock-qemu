@@ -35,22 +35,25 @@ static cap_rev_node_id_t _cap_rev_tree_dup_node_before(cap_rev_tree_t *tree, cap
     return new_node;
 }
 
+cap_rev_node_id_t cap_rev_tree_create_lone_node(cap_rev_tree_t *tree) {
+    cap_rev_node_id_t node = _cap_rev_tree_alloc_node(tree);
+    _CAP_REV_NODE(tree, node).depth = 0;
+    _CAP_REV_NODE(tree, node).refcount = 1;
+    _CAP_REV_NODE(tree, node).prev = CAP_REV_NODE_ID_NULL;
+    _CAP_REV_NODE(tree, node).next = CAP_REV_NODE_ID_NULL;
+    _CAP_REV_NODE(tree, node).valid = true;
+    _CAP_REV_NODE(tree, node).linear = true;
+    return node;
+}
+
 void cap_rev_tree_init(cap_rev_tree_t *tree,
     cap_rev_node_id_t *pc_node, cap_rev_node_id_t *cap0_node, cap_rev_node_id_t *cap1_node)
 {
     tree->alloced_n = 0;
 
-    cap_rev_node_id_t first_node = _cap_rev_tree_alloc_node(tree);
-    _CAP_REV_NODE(tree, first_node).depth = 0;
-    _CAP_REV_NODE(tree, first_node).refcount = 1;
-    _CAP_REV_NODE(tree, first_node).prev = CAP_REV_NODE_ID_NULL;
-    _CAP_REV_NODE(tree, first_node).next = CAP_REV_NODE_ID_NULL;
-    _CAP_REV_NODE(tree, first_node).valid = true;
-    _CAP_REV_NODE(tree, first_node).linear = true;
-
-    *pc_node = first_node;
-    *cap0_node = _cap_rev_tree_dup_node_before(tree, first_node);
-    *cap1_node = _cap_rev_tree_dup_node_before(tree, first_node);
+    *pc_node = cap_rev_tree_create_lone_node(tree);
+    *cap0_node = cap_rev_tree_create_lone_node(tree);
+    *cap1_node = cap_rev_tree_create_lone_node(tree);
 }
 
 
