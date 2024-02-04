@@ -285,9 +285,9 @@ static bool trans_csdebugbreak(DisasContext *ctx, arg_csdebugbreak *a) {
 }
 
 static bool trans_csdebugcount(DisasContext *ctx, arg_csdebugcount *a) {
-    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-    TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
-    gen_helper_csdebugcount(cpu_env, rs1, rs2);
+    TCGv rs1_v = get_gpr(ctx, a->rs1, EXT_NONE);
+    TCGv rs2_v = get_gpr(ctx, a->rs2, EXT_NONE);
+    gen_helper_csdebugcount(cpu_env, rs1_v, rs2_v);
     return true;
 }
 
