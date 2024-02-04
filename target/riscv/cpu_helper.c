@@ -685,9 +685,6 @@ void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level) {
     if(level == 0 && capstone_irq == IRQ_S_EXT) {
         env->mip &= ~(uint64_t)MIP_SEIP;
     }
-
-    trace_capstone_h_int(capstone_irq, level, env->cis, env->mip);
-
     
     riscv_cpu_check_interrupts(env);
 }
@@ -1768,6 +1765,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         capaddr_t base_addr = env->cih.val.cap.bounds.base;
 
         trace_capstone_dom_switch_async(1);
+        trace_capstone_h_int(cause, env->priv);
         swap_domain_scoped_regs(cs->as, env, base_addr, env->pc, DOM_SCOPED_SWAP_OUT);
 
         env->cih.val.cap.type = CAP_TYPE_SEALEDRET;
@@ -1820,7 +1818,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         }
 
         if(async)
-            trace_capstone_v_int(cause, PRV_S, env->priv, env->mideleg);
+            trace_capstone_v_int(cause, PRV_S, env->priv);
 
         s = env->mstatus;
         s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_SIE));
@@ -1878,7 +1876,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             pc_redirect_to_cap(env, &env->ctvec.val.cap);
 
             if(async) {
-                trace_capstone_v_int(cause, PRV_C, env->priv, env->mideleg);
+                trace_capstone_v_int(cause, PRV_C, env->priv);
                 assert(cause != IRQ_S_EXT);
             }
             riscv_cpu_set_mode(env, PRV_C);
