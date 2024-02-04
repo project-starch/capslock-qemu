@@ -395,6 +395,8 @@ struct CPUArchState {
     bool load_is_cap; /* whether the load result is a capability */
     capboundsfat_t load_cap_bounds;
 
+    uint64_t capstone_debug_counters[32];
+
 #ifdef CONFIG_KVM
     /* kvm timer */
     bool kvm_timer_dirty;

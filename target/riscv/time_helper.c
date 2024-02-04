@@ -20,6 +20,7 @@
 #include "qemu/log.h"
 #include "cpu_bits.h"
 #include "time_helper.h"
+#include "trace.h"
 #include "hw/intc/riscv_aclint.h"
 
 static void riscv_vstimer_cb(void *opaque)
@@ -48,6 +49,8 @@ void riscv_timer_write_timecmp(CPURISCVState *env, QEMUTimer *timer,
     RISCVAclintMTimerState *mtimer = env->rdtime_fn_arg;
     uint32_t timebase_freq = mtimer->timebase_freq;
     uint64_t rtc_r = env->rdtime_fn(env->rdtime_fn_arg) + delta;
+
+    trace_riscv_write_timecmp(rtc_r, timecmp);
 
     if (timecmp <= rtc_r) {
         /*

@@ -283,3 +283,15 @@ static bool trans_csdebugbreak(DisasContext *ctx, arg_csdebugbreak *a) {
     gen_helper_capstone_debugger();
     return true;
 }
+
+static bool trans_csdebugcount(DisasContext *ctx, arg_csdebugcount *a) {
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
+    gen_helper_csdebugcount(cpu_env, rs1, rs2);
+    return true;
+}
+
+static bool trans_csdebugcountprint(DisasContext *ctx, arg_csdebugcountprint *a) {
+    gen_helper_csdebugcountprint(cpu_env);
+    return true;
+}

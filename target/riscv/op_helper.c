@@ -1234,3 +1234,16 @@ void helper_capstone_debugger(void) {
     CAPSTONE_DEBUG_PRINT("DEBUGGER\n");
 }
 
+void helper_csdebugcount(CPURISCVState *env, uint32_t rs1_v, uint32_t rs2_v) {
+    assert(rs1_v < 32);
+    env->capstone_debug_counters[rs1_v] += rs2_v;
+}
+
+void helper_csdebugcountprint(CPURISCVState *env) {
+    CAPSTONE_DEBUG_PRINT("CAPSTONE DEBUG COUNTERS\n");
+    int i;
+    for(i = 0; i < 32; i ++) {
+        CAPSTONE_DEBUG_PRINT("counter[%d] = %lu\n", i, env->capstone_debug_counters[i]);
+    }
+}
+
