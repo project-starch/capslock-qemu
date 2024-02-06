@@ -402,6 +402,7 @@ static void riscv_any_cpu_init(Object *obj)
 #if defined(TARGET_RISCV64)
 static void rv64_base_cpu_init(Object *obj)
 {
+    int i;
     CPURISCVState *env = &RISCV_CPU(obj)->env;
     /* We set this in the realise function */
     set_misa(env, MXL_RV64, 0);
@@ -417,7 +418,9 @@ static void rv64_base_cpu_init(Object *obj)
     env->cih.tag = false;
     env->cepc.tag = false;
     env->cscratch.tag = false;
-    env->cmmu.tag = false;
+    for(i = 0; i < CAPSTONE_CPMP_COUNT; i ++) {
+        env->cpmp[i].tag = false;
+    }
 
     cap_mem_map_init(&env->cm_map);
 }

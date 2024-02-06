@@ -378,8 +378,8 @@ struct CPUArchState {
     capregval_t ctvec; /* sealed capability for exception handler */
     capregval_t cih; /* sealed capability for interrupt handler */
     capregval_t cepc; /* excepting PC capability */
-    capregval_t cmmu; /* capability for use with MMU-based memory accesses */
     capregval_t cscratch; /* scratch register for the C mode */
+    capregval_t cpmp[CAPSTONE_CPMP_COUNT]; /* capability for use with MMU-based memory accesses */
 
     target_ulong cis;
     target_ulong cid;

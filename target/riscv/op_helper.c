@@ -873,6 +873,7 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
     CPUState* cpu = env_cpu(env);
 
     // assert(rs1_v->tag);
+    bool needs_tlb_flush = false;
 
     switch((capstone_ccsr_id_t)ccsr_id) {
         case CAPSTONE_CCSR_CTVEC:
@@ -885,13 +886,15 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
         case CAPSTONE_CCSR_CEPC:
             ccsr = &env->cepc;
             break;
-        case CAPSTONE_CCSR_CMMU:
-            ccsr = &env->cmmu;
-            break;
         case CAPSTONE_CCSR_CSCRATCH:
             ccsr = &env->cscratch;
             break;
         default:
+            if((ccsr_id & CAPSTONE_CCSR_CPMP_MASK) == CAPSTONE_CCSR_CPMP_PAT) {
+                ccsr = &env->cpmp[ccsr_id & CAPSTONE_CCSR_CPMP_IND_MASK];
+                needs_tlb_flush = true;
+                break;
+            }
             assert(false); // not a valid CCSR
     }
     
@@ -902,7 +905,7 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
     }
     *rd_v = tmp;
 
-    if((capstone_ccsr_id_t)ccsr_id == CAPSTONE_CCSR_CMMU) {
+    if(needs_tlb_flush) {
         tlb_flush(cpu);
     }
 }
@@ -943,7 +946,8 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64
 
     // TODO: bounds check only for now
     if(!cap_in_bounds(&cap->bounds, addr, (capaddr_t)size)) {
-        CAPSTONE_DEBUG_PRINT("Cap mem access OOB: addr = %lx, size = %lu\n", addr, (capaddr_t)size);
+        CAPSTONE_DEBUG_PRINT("Cap mem access OOB: addr = %lx, size = %lu, bounds = (%lx, %lx)\n", addr, (capaddr_t)size,
+            cap->bounds.base, cap->bounds.end);
         RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
         riscv_raise_exception(env, excp, GETPC());
     }

@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <assert.h>
 
+#define CAPSTONE_CPMP_COUNT 16
+
 typedef uint64_t capaddr_t;
 typedef uint32_t cap_rev_node_id_t;
 

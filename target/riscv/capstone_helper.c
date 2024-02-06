@@ -124,8 +124,10 @@ void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_a
 
     // TODO: handle differently based on mode
     SWAP_INT64(offsetmmu);
-    SWAP_CAP(cmmu);
     SWAP_CAP(cepc);
+    for(i = 0; i < CAPSTONE_CPMP_COUNT; i ++) {
+        SWAP_CAP(cpmp[i]);
+    }
 
     // swap GPRs
     for(i = 1; i < 32; i ++) {

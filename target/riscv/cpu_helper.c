@@ -1912,6 +1912,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
 
 bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessType access_type, uintptr_t retaddr) {
+    int i;
     bool access_allowed;
     CPURISCVState* env = cs->env_ptr;
     if(!env->cap_mem || env->priv == PRV_C)
@@ -1932,7 +1933,10 @@ bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessT
                 access = CAP_PERMS_XO;
                 break;
         }
-        access_allowed = capreg_allow_access(&env->cmmu, (capaddr_t)physaddr, (capaddr_t)size, access);
+        access_allowed = false;
+        for(i = 0; i < CAPSTONE_CPMP_COUNT; i ++) {
+            access_allowed = access_allowed || capreg_allow_access(&env->cpmp[i], (capaddr_t)physaddr, (capaddr_t)size, access);
+        }
     }
     if(!access_allowed) {
         // set up exception
