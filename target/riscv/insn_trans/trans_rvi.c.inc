@@ -287,7 +287,7 @@ static bool gen_load(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
     // TODO: support capability-based addressing
     decode_save_opc(ctx);
-    if (ctx->cap_mem && ctx->priv == PRV_C) {
+    if (ctx->priv == PRV_U) {
         // we need to use Capstone capabilities
         return gen_load_tl_with_cap(ctx, a, memop);
     } else {
@@ -398,7 +398,7 @@ static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
 static bool gen_store(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
     decode_save_opc(ctx);
-    if (ctx->cap_mem && ctx->priv == PRV_C) {
+    if (ctx->priv == PRV_U) {
         /* perform store using a capability */
         return gen_store_tl_with_cap(ctx, a, memop);
     } else {
