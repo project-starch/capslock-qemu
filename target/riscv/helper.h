@@ -1199,6 +1199,7 @@ DEF_HELPER_4(cstighten, void, env, i32, i32, i32)
 DEF_HELPER_2(csdelin, void, env, i32)
 DEF_HELPER_4(csinit, void, env, i32, i32, i32)
 DEF_HELPER_3(csseal, void, env, i32, i32)
+DEF_HELPER_2(csdrop, void, env, i32)
 DEF_HELPER_4(csccsrrw, void, env, i32, i32, tl)
 
 DEF_HELPER_4(load_with_cap, tl, env, i32, tl, i32)

@@ -47,6 +47,11 @@ inline static bool cap_rev_tree_check_valid(cap_rev_tree_t *tree, cap_rev_node_i
     return _CAP_REV_NODE(tree, node_id).valid;
 }
 
+inline static void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
+    assert(node_id < tree->alloced_n);
+    _CAP_REV_NODE(tree, node_id).valid = false;
+}
+
 inline static void cap_rev_tree_update_refcount(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, int32_t delta) {
     assert(node_id < tree->alloced_n);
     _CAP_REV_NODE(tree, node_id).refcount += delta;

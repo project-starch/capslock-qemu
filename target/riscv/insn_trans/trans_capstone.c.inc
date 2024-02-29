@@ -106,6 +106,12 @@ static bool trans_csseal(DisasContext *ctx, arg_csseal *a) {
     return true;
 }
 
+static bool trans_csdrop(DisasContext *ctx, arg_csdrop *a) {
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    gen_helper_csdrop(cpu_env, rs1);
+    return true;
+}
+
 static bool trans_csccsrrw(DisasContext *ctx, arg_csccsrrw *a) {
     TCGv imm = tcg_constant_tl(a->imm);
     TCGv_i32 rd = tcg_constant_i32(a->rd);

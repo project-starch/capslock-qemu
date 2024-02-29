@@ -809,6 +809,16 @@ void helper_csdelin(CPURISCVState *env, uint32_t rd) {
     cap_rev_tree_delin(&env->cr_tree, rd_v->val.cap.rev_node_id);
 }
 
+void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
+    capregval_t *rs1_v = &env->gpr[rs1];
+    
+    assert(rs1_v->tag);
+
+    if(rs1_v->val.cap.type == CAP_TYPE_LIN) {
+        cap_rev_tree_invalidate(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+    }
+}
+
 void helper_csinit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
@@ -920,27 +930,14 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64
     capregval_t *rs1_v = &env->gpr[rs1];
 
     capaddr_t addr;
+    unsigned size = memop_size((MemOp)memop);
+
     if(rs1_v->tag) {
         capfat_t *cap = &rs1_v->val.cap;
-        unsigned size = memop_size((MemOp)memop);
         imm = CAPSTONE_IMM12_SEXT(imm); // sign extend
         addr = cap->bounds.cursor + imm;
 
         // CAPSTONE_DEBUG_PRINT("Cap mem access addr = %lx, size = %lu\n", addr, (capaddr_t)size);
-
-        if(size == 16) {
-            // accessing capabilities in memory, extra checks needed
-            // check alignment
-            if(addr & 15) {
-                CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
-                riscv_raise_exception(env, RISCV_EXCP_LOAD_ADDR_MIS, GETPC());
-            }
-            // for load, we need to make sure it's a capability
-            if(!is_store) {
-                env->load_is_cap = cap_mem_map_query(&env->cm_map, addr, &env->load_cap_bounds);
-            }
-        }
-
         // TODO: bounds check only for now
         if(!cap_in_bounds(&cap->bounds, addr, (capaddr_t)size)) {
             CAPSTONE_DEBUG_PRINT("Cap mem access OOB: addr = %lx, size = %lu, bounds = (%lx, %lx)\n", addr, (capaddr_t)size,
@@ -953,6 +950,20 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64
     } else {
         CAPSTONE_DEBUG_PRINT("Cap mem access requires capability\n");
         riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+    }
+
+
+    if(size == 16) {
+        // accessing capabilities in memory, extra checks needed
+        // check alignment
+        if(addr & 15) {
+            CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
+            riscv_raise_exception(env, RISCV_EXCP_LOAD_ADDR_MIS, GETPC());
+        }
+        // for load, we need to make sure it's a capability
+        if(!is_store) {
+            env->load_is_cap = cap_mem_map_query(&env->cm_map, addr, &env->load_cap_bounds);
+        }
     }
 
     return addr;
