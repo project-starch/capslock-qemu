@@ -115,51 +115,42 @@ static bool trans_csccsrrw(DisasContext *ctx, arg_csccsrrw *a) {
 }
 
 static bool trans_csldc(DisasContext *ctx, arg_csldc *a) {
-    /* Can only be used in cap-mem mode */
-    if (disas_context_in_c_mode(ctx)) {
-        TCGv addr = tcg_temp_new();
-        TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-        TCGv_i32 rd = tcg_constant_i32(a->rd);
-        TCGv imm = tcg_constant_tl(a->imm);
-        TCGv_i32 memop_v = tcg_constant_i32((int)MO_TEUO);
+    TCGv addr = tcg_temp_new();
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv imm = tcg_constant_tl(a->imm);
+    TCGv_i32 memop_v = tcg_constant_i32((int)MO_TEUO);
 
-        gen_helper_load_with_cap(addr, cpu_env, rs1, imm, memop_v);
+    gen_helper_load_with_cap(addr, cpu_env, rs1, imm, memop_v);
 
-        TCGv dest1 = tcg_temp_new();
-        TCGv dest2 = tcg_temp_new();
+    TCGv dest1 = tcg_temp_new();
+    TCGv dest2 = tcg_temp_new();
 
-        tcg_gen_qemu_ld_tl(dest1, addr, ctx->mem_idx, MO_TESQ);
-        tcg_gen_addi_tl(addr, addr, 8);
-        tcg_gen_qemu_ld_tl(dest2, addr, ctx->mem_idx, MO_TESQ);
+    tcg_gen_qemu_ld_tl(dest1, addr, ctx->mem_idx, MO_TESQ);
+    tcg_gen_addi_tl(addr, addr, 8);
+    tcg_gen_qemu_ld_tl(dest2, addr, ctx->mem_idx, MO_TESQ);
 
-        gen_helper_reg_set_cap_compressed(cpu_env, rd, dest1, dest2); // TODO: this can be optimised
-    } else {
-        gen_exception_illegal(ctx);
-    }
+    gen_helper_reg_set_cap_compressed(cpu_env, rd, dest1, dest2); // TODO: this can be optimised
     return true;
 }
 
 
 static bool trans_csstc(DisasContext *ctx, arg_csstc *a) {
-    if (disas_context_in_c_mode(ctx)) {
-        TCGv addr = tcg_temp_new();
-        TCGv check_tag = tcg_temp_new();
-        TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-        TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
-        TCGv imm = tcg_constant_tl(a->imm);
-        TCGv_i32 memop_v = tcg_constant_i32((int)MO_TEUO);
+    TCGv addr = tcg_temp_new();
+    TCGv check_tag = tcg_temp_new();
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
+    TCGv imm = tcg_constant_tl(a->imm);
+    TCGv_i32 memop_v = tcg_constant_i32((int)MO_TEUO);
 
-        gen_helper_compress_cap(check_tag, cpu_env, rs2);
-        gen_helper_store_with_cap(addr, cpu_env, rs1, imm, memop_v);
+    gen_helper_compress_cap(check_tag, cpu_env, rs2);
+    gen_helper_store_with_cap(addr, cpu_env, rs1, imm, memop_v);
 
-        gen_helper_set_cap_mem_map(cpu_env, rs2, addr, check_tag);
+    gen_helper_set_cap_mem_map(cpu_env, rs2, addr, check_tag);
 
-        tcg_gen_qemu_st_tl(cap_compress_result_lo, addr, ctx->mem_idx, MO_TEUQ);
-        tcg_gen_addi_tl(addr, addr, 8);
-        tcg_gen_qemu_st_tl(cap_compress_result_hi, addr, ctx->mem_idx, MO_TEUQ);
-    } else {
-        gen_exception_illegal(ctx);
-    }
+    tcg_gen_qemu_st_tl(cap_compress_result_lo, addr, ctx->mem_idx, MO_TEUQ);
+    tcg_gen_addi_tl(addr, addr, 8);
+    tcg_gen_qemu_st_tl(cap_compress_result_hi, addr, ctx->mem_idx, MO_TEUQ);
     return true;
 }
 
