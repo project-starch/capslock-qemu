@@ -814,9 +814,7 @@ void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
     
     assert(rs1_v->tag);
 
-    if(rs1_v->val.cap.type == CAP_TYPE_LIN) {
-        cap_rev_tree_invalidate(&env->cr_tree, rs1_v->val.cap.rev_node_id);
-    }
+    cap_rev_tree_invalidate(&env->cr_tree, rs1_v->val.cap.rev_node_id);
 }
 
 void helper_csinit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
