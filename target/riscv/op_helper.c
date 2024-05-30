@@ -565,58 +565,58 @@ target_ulong helper_hyp_hlvx_wu(CPURISCVState *env, target_ulong addr)
 
 /* Capstone helpers */
 
-void helper_csmovc(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
+// void helper_csmovc(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+//     capregval_t *rd_v = &env->gpr[rd];
+//     capregval_t *rs1_v = &env->gpr[rs1];
 
-    if(rs1 != rd) {
-        *rd_v = *rs1_v;
-        if(rs1_v->tag && !captype_is_copyable(rs1_v->val.cap.type)) {
-            *rs1_v = CAPREGVAL_NULL;
-        }
-    }
-}
+//     if(rs1 != rd) {
+//         *rd_v = *rs1_v;
+//         if(rs1_v->tag && !captype_is_copyable(rs1_v->val.cap.type)) {
+//             *rs1_v = CAPREGVAL_NULL;
+//         }
+//     }
+// }
 
-void helper_cscincoffset(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
-    capregval_t *rs2_v = &env->gpr[rs2];
+// void helper_cscincoffset(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+//     capregval_t *rd_v = &env->gpr[rd];
+//     capregval_t *rs1_v = &env->gpr[rs1];
+//     capregval_t *rs2_v = &env->gpr[rs2];
 
-    assert(rs1_v->tag && !rs2_v->tag);
+//     assert(rs1_v->tag && !rs2_v->tag);
 
-    assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
-           rs1_v->val.cap.type != CAP_TYPE_SEALED);
+//     assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
+//            rs1_v->val.cap.type != CAP_TYPE_SEALED);
 
-    capaddr_t offset = rs2_v->val.scalar;
+//     capaddr_t offset = rs2_v->val.scalar;
 
-    if(rs1 != rd) {
-        *rd_v = *rs1_v;
-        if(!captype_is_copyable(rs1_v->val.cap.type)) {
-            *rs1_v = CAPREGVAL_NULL;
-        }
-    }
+//     if(rs1 != rd) {
+//         *rd_v = *rs1_v;
+//         if(!captype_is_copyable(rs1_v->val.cap.type)) {
+//             *rs1_v = CAPREGVAL_NULL;
+//         }
+//     }
 
-    rd_v->val.cap.bounds.cursor += offset;
-}
+//     rd_v->val.cap.bounds.cursor += offset;
+// }
 
-void helper_cscincoffsetimm(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t offset) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
+// void helper_cscincoffsetimm(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t offset) {
+//     capregval_t *rd_v = &env->gpr[rd];
+//     capregval_t *rs1_v = &env->gpr[rs1];
 
-    assert(rs1_v->tag);
+//     assert(rs1_v->tag);
 
-    assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
-           rs1_v->val.cap.type != CAP_TYPE_SEALED);
+//     assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
+//            rs1_v->val.cap.type != CAP_TYPE_SEALED);
 
-    if(rs1 != rd) {
-        *rd_v = *rs1_v;
-        if(!captype_is_copyable(rs1_v->val.cap.type)) {
-            *rs1_v = CAPREGVAL_NULL;
-        }
-    }
+//     if(rs1 != rd) {
+//         *rd_v = *rs1_v;
+//         if(!captype_is_copyable(rs1_v->val.cap.type)) {
+//             *rs1_v = CAPREGVAL_NULL;
+//         }
+//     }
 
-    rd_v->val.cap.bounds.cursor += offset;
-}
+//     rd_v->val.cap.bounds.cursor += offset;
+// }
 
 void helper_csscc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
     capregval_t *rd_v = &env->gpr[rd];
@@ -627,7 +627,7 @@ void helper_csscc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
 
     assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
            rs1_v->val.cap.type != CAP_TYPE_SEALED);
-    
+
     capaddr_t cursor = rs2_v->val.scalar;
 
     if(rs1 != rd) {
@@ -741,7 +741,7 @@ void helper_csshrinkto(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t s
            rs1_v->val.cap.type == CAP_TYPE_UNINIT);
     assert(rs1_v->val.cap.bounds.cursor >= rs1_v->val.cap.bounds.base &&
             rs1_v->val.cap.bounds.cursor + size <= rs1_v->val.cap.bounds.end);
-    
+
     *rd_v = *rs1_v;
     rd_v->val.cap.bounds.base = rd_v->val.cap.bounds.cursor;
     rd_v->val.cap.bounds.end = rd_v->val.cap.bounds.cursor + size;
@@ -778,7 +778,7 @@ void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t pe
     assert(rs1_v->tag);
     assert(rs1_v->val.cap.type == CAP_TYPE_LIN || rs1_v->val.cap.type == CAP_TYPE_NONLIN ||
            rs1_v->val.cap.type == CAP_TYPE_UNINIT);
-    
+
     capperms_t perms_p = perms > 7 ? CAP_PERMS_NA : (capperms_t)perms;
 
     assert(cap_perms_allow(rs1_v->val.cap.perms, perms_p));
@@ -811,7 +811,7 @@ void helper_csdelin(CPURISCVState *env, uint32_t rd) {
 
 void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
-    
+
     assert(rs1_v->tag);
 
     cap_rev_tree_invalidate(&env->cr_tree, rs1_v->val.cap.rev_node_id);
@@ -905,7 +905,7 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
             }
             assert(false); // not a valid CCSR
     }
-    
+
     tmp = *ccsr;
     *ccsr = *rs1_v;
     if(!captype_is_copyable(rs1_v->val.cap.type)) {
@@ -922,7 +922,7 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
 
 #define CAPSTONE_IMM12_SEXT(x) ((x) | (((-((x) >> 11)) << 12)))
 
-static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, uint32_t memop, bool is_store) {
+static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32_t rs2, uint64_t imm, uint32_t memop, bool is_store) {
     // CAPSTONE_DEBUG_PRINT("Cap mem access %u %lx\n", rs1, imm);
 
     capregval_t *rs1_v = &env->gpr[rs1];
@@ -951,16 +951,20 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64
     }
 
 
-    if(size == 16) {
+    if(size == 8) {
         // accessing capabilities in memory, extra checks needed
         // check alignment
-        if(addr & 15) {
-            CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
-            riscv_raise_exception(env, RISCV_EXCP_LOAD_ADDR_MIS, GETPC());
-        }
-        // for load, we need to make sure it's a capability
-        if(!is_store) {
+        if(is_store) {
+            if (env->gpr[rs2].tag && (addr & 7)) {
+                CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
+                riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_ADDR_MIS, GETPC());
+            }
+        } else {
             env->load_is_cap = cap_mem_map_query(&env->cm_map, addr, &env->load_cap_bounds);
+            if(env->load_is_cap && (addr & 7)) {
+                CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
+                riscv_raise_exception(env, RISCV_EXCP_LOAD_ADDR_MIS, GETPC());
+            }
         }
     }
 
@@ -969,39 +973,59 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint64
 }
 
 uint64_t helper_load_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, uint32_t memop) {
-    return _helper_access_with_cap(env, rs1, imm, memop, false);
+    return _helper_access_with_cap(env, rs1, 0, imm, memop, false);
 }
 
 
-uint64_t helper_store_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, uint32_t memop) {
-    return _helper_access_with_cap(env, rs1, imm, memop, true);
+uint64_t helper_store_with_cap(CPURISCVState *env, uint32_t rs1, uint32_t rs2,
+                        uint64_t imm, uint32_t memop) {
+    if (env->gpr[rs2].tag) {
+        // contains a capability
+        int cap_idx = cap_map_alloc();
+        *cap_map_get(cap_idx) = env->gpr[rs2].val.cap;
+        cap_mem_map_add(&env->cm_map, env->gpr[rs1].val.scalar + imm, &env->gpr[rs2].val.cap.bounds);
+        env->data_to_store_with_cap = cap_idx;
+    } else {
+        env->data_to_store_with_cap = env->gpr[rs2].val.scalar;
+    }
+    return _helper_access_with_cap(env, rs1, rs2, imm, memop, true);
 }
 
-void helper_reg_set_cap_compressed(CPURISCVState *env, uint32_t rd, uint64_t i64_lo, uint64_t i64_hi) {
-    // CAPSTONE_DEBUG_PRINT("uncompressing capability to reg %u\n", rd);
-    capregval_t *rd_v = &env->gpr[rd];
-    cap_uncompress(i64_lo, i64_hi, &rd_v->val.cap);
-    rd_v->tag = env->load_is_cap;
-    if(rd_v->tag) {
-        memcpy(&rd_v->val.cap.bounds, &env->load_cap_bounds, sizeof(capboundsfat_t));
+// check if the location has a capability, if it does, retrieve it from the cap map
+void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd) {
+    if (cap_mem_map_query(&env->cm_map, addr, NULL)) {
+        env->gpr[rd].tag = true;
+        env->gpr[rd].val.cap = *cap_map_get((int)env->gpr[rd].val.scalar);
+    } else {
+        env->gpr[rd].tag = false;
     }
 }
 
-uint64_t helper_compress_cap(CPURISCVState *env, uint32_t reg) {
-    // CAPSTONE_DEBUG_PRINT("compressing capability in reg %u\n", reg);
-    capregval_t *reg_v = &env->gpr[reg];
-    
-    if(!reg_v->tag) {
-        // CAPSTONE_DEBUG_PRINT("attempting to compress non-capability %lx\n", reg_v->val.scalar);
-        // riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
-        env->cap_compress_result_lo = reg_v->val.scalar;
-        env->cap_compress_result_hi = 0;
-        return 0;
-    }
+// void helper_reg_set_cap_compressed(CPURISCVState *env, uint32_t rd, uint64_t i64_lo, uint64_t i64_hi) {
+//     // CAPSTONE_DEBUG_PRINT("uncompressing capability to reg %u\n", rd);
+//     capregval_t *rd_v = &env->gpr[rd];
+//     cap_uncompress(i64_lo, i64_hi, &rd_v->val.cap);
+//     rd_v->tag = env->load_is_cap;
+//     if(rd_v->tag) {
+//         memcpy(&rd_v->val.cap.bounds, &env->load_cap_bounds, sizeof(capboundsfat_t));
+//     }
+// }
 
-    cap_compress(&reg_v->val.cap, &env->cap_compress_result_lo, &env->cap_compress_result_hi);
-    return 1;
-}
+// uint64_t helper_compress_cap(CPURISCVState *env, uint32_t reg) {
+//     // CAPSTONE_DEBUG_PRINT("compressing capability in reg %u\n", reg);
+//     capregval_t *reg_v = &env->gpr[reg];
+
+//     if(!reg_v->tag) {
+//         // CAPSTONE_DEBUG_PRINT("attempting to compress non-capability %lx\n", reg_v->val.scalar);
+//         // riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+//         env->cap_compress_result_lo = reg_v->val.scalar;
+//         env->cap_compress_result_hi = 0;
+//         return 0;
+//     }
+
+//     cap_compress(&reg_v->val.cap, &env->cap_compress_result_lo, &env->cap_compress_result_hi);
+//     return 1;
+// }
 
 /* set tag bit for address */
 void helper_set_cap_mem_map(CPURISCVState *env, uint32_t reg, uint64_t addr, uint64_t to_set) {
@@ -1041,7 +1065,7 @@ void helper_cjalr_switch_caps(CPURISCVState *env, uint32_t rd, uint32_t rs1, uin
 /* This does not touch PC itself */
 void helper_set_pc_cap(CPURISCVState *env, uint32_t reg) {
     capregval_t *v = &env->gpr[reg];
-    
+
     if(!v->tag) {
         CAPSTONE_DEBUG_PRINT("PC cap must be a capability\n");
         riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
@@ -1061,7 +1085,7 @@ void helper_cscall(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     } else {
         rs1_v = &env->gpr[rs1];
     }
-    
+
     if(!rs1_v->tag) {
         CAPSTONE_DEBUG_PRINT("Call requires a capability\n");
         riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
@@ -1134,7 +1158,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
                 }
 
                 *rd_v = CAPREGVAL_NULL;
-                
+
                 trace_capstone_dom_switch_sync();
                 swap_c_effective_regs(cs->as, env, base_addr, rs1_v->val.scalar);
 
@@ -1144,7 +1168,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
                     capregval_set_cap(&env->cih, &rd_cap);
                     env->cih.val.cap.type = CAP_TYPE_SEALED;
                     // also deliver the V-interrupts
-                    
+
                     QEMU_IOTHREAD_LOCK_GUARD();
                     env->mip |= rs2_val;
                     riscv_cpu_check_interrupts(env);
@@ -1178,7 +1202,7 @@ void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
 void helper_cscapenter(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
     // enters the capability mode
     env->cap_mem = true;
-    
+
     // generates the genesis capabilities
     assert(rs1 && rs2); // we do not allow the platform-dependent case for now
     uint64_t pc_lo_addr = env->gpr[rs1].val.scalar;

@@ -391,7 +391,7 @@ struct CPUArchState {
     cap_mem_map_t cm_map; /* maintains locations of capabilities in memory */
     cap_rev_tree_t cr_tree; /* capability revocation tree */
 
-    target_ulong cap_compress_result_lo, cap_compress_result_hi; /* low and high of capability compression */
+    target_ulong data_to_store_with_cap;
     bool load_is_cap; /* whether the load result is a capability */
     capboundsfat_t load_cap_bounds;
 

@@ -48,7 +48,8 @@ static TCGv load_val;
 /* globals for PM CSRs */
 static TCGv pm_mask;
 static TCGv pm_base;
-static TCGv cap_compress_result_lo, cap_compress_result_hi;
+// static TCGv cap_compress_result_lo, cap_compress_result_hi;
+static TCGv data_to_store_with_cap;
 
 /*
  * If an operation is being performed on less than TARGET_LONG_BITS,
@@ -367,7 +368,7 @@ static TCGv get_gpr(DisasContext *ctx, int reg_num, DisasExtend ext)
 
 static TCGv get_gprh(DisasContext *ctx, int reg_num)
 {
-    assert(get_xl(ctx) == MXL_RV128);
+    assert(get_xl(ctx) >= MXL_RV64);
     if (reg_num == 0) {
         return ctx->zero;
     }
@@ -390,11 +391,14 @@ static TCGv dest_gprh(DisasContext *ctx, int reg_num)
     return cpu_gprh[reg_num];
 }
 
-static void gen_set_gpr(DisasContext *ctx, int reg_num, TCGv t)
+static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, TCGv th, TCGv_i32 tag)
 {
     if (reg_num != 0) {
         TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
-        tcg_gen_movi_i32(dest_tag, 0); // clear the tag
+        if (tag)
+            tcg_gen_mov_i32(dest_tag, tag);
+        else
+            tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
         switch (get_ol(ctx)) {
         case MXL_RV32:
             tcg_gen_ext32s_tl(cpu_gpr[reg_num], t);
@@ -402,6 +406,7 @@ static void gen_set_gpr(DisasContext *ctx, int reg_num, TCGv t)
         case MXL_RV64:
         case MXL_RV128:
             tcg_gen_mov_tl(cpu_gpr[reg_num], t);
+            tcg_gen_mov_tl(cpu_gprh[reg_num], th);
             break;
         default:
             g_assert_not_reached();
@@ -411,6 +416,12 @@ static void gen_set_gpr(DisasContext *ctx, int reg_num, TCGv t)
             tcg_gen_sari_tl(cpu_gprh[reg_num], cpu_gpr[reg_num], 63);
         }
     }
+}
+
+static void gen_set_gpr(DisasContext *ctx, int reg_num, TCGv t)
+{
+    TCGv_i32 tag = tcg_constant_i32(0);
+    gen_set_gpr_tagged(ctx, reg_num, t, tcg_constant_tl(0), tag); // clear the tag
 }
 
 static void gen_set_gpri(DisasContext *ctx, int reg_num, target_long imm)
@@ -860,7 +871,10 @@ static bool gen_arith_imm_fn(DisasContext *ctx, arg_i *a, DisasExtend ext,
 
     if (get_ol(ctx) < MXL_RV128) {
         func(dest, src1, a->imm);
-        gen_set_gpr(ctx, a->rd, dest);
+        if (get_ol(ctx) == MXL_RV64)
+            gen_set_gpr_tagged(ctx, a->rd, dest, get_gprh(ctx, a->rs1), cpu_gpr_tag[a->rs1]);
+        else
+            gen_set_gpr(ctx, a->rd, dest);
     } else {
         if (f128 == NULL) {
             return false;
@@ -886,7 +900,10 @@ static bool gen_arith_imm_tl(DisasContext *ctx, arg_i *a, DisasExtend ext,
 
     if (get_ol(ctx) < MXL_RV128) {
         func(dest, src1, src2);
-        gen_set_gpr(ctx, a->rd, dest);
+        if (get_ol(ctx) == MXL_RV64)
+            gen_set_gpr_tagged(ctx, a->rd, dest, get_gprh(ctx, a->rs1), cpu_gpr_tag[a->rs1]);
+        else
+            gen_set_gpr(ctx, a->rd, dest);
     } else {
         if (f128 == NULL) {
             return false;
@@ -912,7 +929,10 @@ static bool gen_arith(DisasContext *ctx, arg_r *a, DisasExtend ext,
 
     if (get_ol(ctx) < MXL_RV128) {
         func(dest, src1, src2);
-        gen_set_gpr(ctx, a->rd, dest);
+        if (get_ol(ctx) == MXL_RV64)
+            gen_set_gpr_tagged(ctx, a->rd, dest, get_gprh(ctx, a->rs1), cpu_gpr_tag[a->rs1]);
+        else
+            gen_set_gpr(ctx, a->rd, dest);
     } else {
         if (f128 == NULL) {
             return false;
@@ -1329,7 +1349,7 @@ void riscv_translate_init(void)
         cpu_gpr[i] = tcg_global_mem_new(cpu_env,
             offsetof(CPURISCVState, gpr[i].val), riscv_int_regnames[i]);
         cpu_gprh[i] = tcg_global_mem_new(cpu_env,
-            offsetof(CPURISCVState, gprh[i]), riscv_int_regnamesh[i]);
+            offsetof(CPURISCVState, gpr[i].val) + 8, riscv_int_regnamesh[i]);
         cpu_gpr_tag[i] = tcg_global_mem_new_i32(cpu_env,
             offsetof(CPURISCVState, gpr[i].tag), riscv_int_regnames_tags[i]);
     }
@@ -1352,9 +1372,11 @@ void riscv_translate_init(void)
                                  "pmmask");
     pm_base = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, cur_pmbase),
                                  "pmbase");
-    
-    cap_compress_result_lo = tcg_global_mem_new(cpu_env,
-        offsetof(CPURISCVState, cap_compress_result_lo), "cap_compress_result_lo");
-    cap_compress_result_hi = tcg_global_mem_new(cpu_env,
-        offsetof(CPURISCVState, cap_compress_result_hi), "cap_compress_result_hi");
+
+    data_to_store_with_cap = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, data_to_store_with_cap),
+                                "data_to_store_with_cap");
+    // cap_compress_result_lo = tcg_global_mem_new(cpu_env,
+    //     offsetof(CPURISCVState, cap_compress_result_lo), "cap_compress_result_lo");
+    // cap_compress_result_hi = tcg_global_mem_new(cpu_env,
+    //     offsetof(CPURISCVState, cap_compress_result_hi), "cap_compress_result_hi");
 }

@@ -69,13 +69,20 @@ struct CapFat {
     capboundsfat_t bounds;
     capperms_t perms;
     captype_t type;
-    capasync_t async; 
+    capasync_t async;
     reg_idx_t reg;
     cap_rev_node_id_t rev_node_id;
 };
 
 typedef struct CapFat capfat_t;
 
+// in-memory
+struct CapLight {
+    uint64_t cap_index; // capability index
+    int offset;
+};
+
+typedef struct CapLight caplight_t;
 struct CapRegVal {
     union {
         capfat_t cap;
@@ -84,6 +91,10 @@ struct CapRegVal {
 
     bool tag; // true: capability
 };
+
+capfat_t *cap_map_get(int idx);
+int cap_map_alloc(void);
+void cap_map_free(int idx);
 
 typedef struct CapRegVal capregval_t;
 
@@ -133,5 +144,7 @@ static inline void cap_set_capregval(capfat_t* cap, capregval_t* capreg) {
 static inline bool cap_type_in_mask(capfat_t* cap, captype_mask_t mask) {
     return ((mask >> cap->type) & 1) != 0;
 }
+
+
 
 #endif

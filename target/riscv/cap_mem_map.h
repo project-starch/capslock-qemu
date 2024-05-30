@@ -13,8 +13,8 @@ typedef uint64_t cap_mem_map_addr_t;
 
 struct CapMemMapEntry {
     cap_mem_map_addr_t addr;
-    uint64_t map[4]; // covers 4 * 64 * 16 = 4096 bytes
-    capboundsfat_t bounds[4 * 64]; // we hack this to prevent precision loss for now
+    uint64_t map[8]; // covers 4 * 64 * 16 = 4096 bytes
+    capboundsfat_t bounds[8 * 64]; // we hack this to prevent precision loss for now
 };
 
 struct CapMemMap {

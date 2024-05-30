@@ -2,12 +2,15 @@
 #include <assert.h>
 #include "cap_mem_map.h"
 
+#define MEM_CAP_SIZE 8 // size of a capability in memory in bytes
+#define MEM_CAP_SIZE_LOG 3
+
 static inline bool addr_is_aligned(cap_mem_map_addr_t addr) {
-    return (addr & 15) == 0;
+    return (addr & (MEM_CAP_SIZE - 1)) == 0;
 }
 
 static inline cap_mem_map_addr_t addr_round_down(cap_mem_map_addr_t addr) {
-    return addr & ~(cap_mem_map_addr_t)15;
+    return addr & ~(cap_mem_map_addr_t)(MEM_CAP_SIZE - 1);
 }
 
 static inline cap_mem_map_addr_t addr_get_entry_base(cap_mem_map_addr_t addr) {
@@ -15,15 +18,15 @@ static inline cap_mem_map_addr_t addr_get_entry_base(cap_mem_map_addr_t addr) {
 }
 
 static inline unsigned addr_get_entry_offset(cap_mem_map_addr_t addr) {
-    return (unsigned)((addr & 4095) >> 4);
+    return (unsigned)((addr & 4095) >> MEM_CAP_SIZE_LOG);
 }
 
 static inline void set_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset, capboundsfat_t *bounds) {
-    assert(offset < 256);
+    assert(offset < 4096 / MEM_CAP_SIZE);
     unsigned idx = offset >> 6;
     unsigned bidx = offset & 63;
     entry->map[idx] |= (uint64_t)1 << bidx;
-    memcpy(&entry->bounds[offset], bounds, sizeof(capboundsfat_t));
+    // memcpy(&entry->bounds[offset], bounds, sizeof(capboundsfat_t));
 }
 
 static inline void clear_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset) {
@@ -33,10 +36,12 @@ static inline void clear_entry_at_offset(struct CapMemMapEntry *entry, unsigned 
 }
 
 static inline bool get_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset, capboundsfat_t *bounds_out) {
-    assert(offset < 256);
+    assert(offset < 4096 / MEM_CAP_SIZE);
     unsigned idx = offset >> 6;
     unsigned bidx = offset & 63;
-    memcpy(bounds_out, &entry->bounds[offset], sizeof(capboundsfat_t));
+    // if(bounds_out) {
+    //     memcpy(bounds_out, &entry->bounds[offset], sizeof(capboundsfat_t));
+    // }
     return ((entry->map[idx] >> bidx) & 1) != 0;
 }
 
@@ -83,7 +88,7 @@ void cap_mem_map_remove(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
 void cap_mem_map_remove_range(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, unsigned size) {
     cap_mem_map_addr_t start_addr = addr_round_down(addr);
     cap_mem_map_addr_t end_addr = addr_round_down(addr + size - 1);
-    for(; start_addr <= end_addr; start_addr += 16) {
+    for(; start_addr <= end_addr; start_addr += MEM_CAP_SIZE) {
         cap_mem_map_remove(cm_map, start_addr);
     }
 }
