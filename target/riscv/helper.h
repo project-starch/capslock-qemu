@@ -1206,6 +1206,7 @@ DEF_HELPER_4(load_with_cap, tl, env, i32, tl, i32)
 DEF_HELPER_5(store_with_cap, tl, env, i32, i32, tl, i32)
 // DEF_HELPER_4(reg_set_cap_compressed, void, env, i32, tl, tl)
 DEF_HELPER_3(check_cap_load, void, env, tl, i32)
+DEF_HELPER_4(move_cap, void, env, tl, i32, i32)
 
 // DEF_HELPER_2(compress_cap, tl, env, i32)
 DEF_HELPER_4(set_cap_mem_map, void, env, i32, tl, tl)

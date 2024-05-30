@@ -1288,3 +1288,9 @@ void helper_csdebugcountprint(CPURISCVState *env) {
     }
 }
 
+void helper_move_cap(CPURISCVState *env, uint64_t v, uint32_t rd_v, uint32_t rs1_v) {
+    env->gpr[rd_v].val = env->gpr[rs1_v].val;
+    env->gpr[rd_v].val.scalar = v;
+}
+
+

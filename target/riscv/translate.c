@@ -391,8 +391,9 @@ static TCGv dest_gprh(DisasContext *ctx, int reg_num)
     return cpu_gprh[reg_num];
 }
 
-static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, TCGv th, TCGv_i32 tag)
+static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs, TCGv_i32 tag)
 {
+    TCGLabel *l, *fin;
     if (reg_num != 0) {
         TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
         if (tag)
@@ -405,8 +406,21 @@ static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, TCGv th, 
             break;
         case MXL_RV64:
         case MXL_RV128:
-            tcg_gen_mov_tl(cpu_gpr[reg_num], t);
-            tcg_gen_mov_tl(cpu_gprh[reg_num], th);
+            if (tag) {
+                l = gen_new_label();
+                fin = gen_new_label();
+
+                tcg_gen_brcondi_i32(TCG_COND_NE, tag, 0x0, l);
+                tcg_gen_mov_tl(cpu_gpr[reg_num], t);
+                tcg_gen_br(fin);
+
+                gen_set_label(l);
+                gen_helper_move_cap(cpu_env, t, tcg_constant_i32(reg_num), tcg_constant_i32(rs));
+                gen_set_label(fin);
+            } else {
+                tcg_gen_mov_tl(cpu_gpr[reg_num], t);
+            }
+
             break;
         default:
             g_assert_not_reached();
@@ -421,7 +435,7 @@ static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, TCGv th, 
 static void gen_set_gpr(DisasContext *ctx, int reg_num, TCGv t)
 {
     TCGv_i32 tag = tcg_constant_i32(0);
-    gen_set_gpr_tagged(ctx, reg_num, t, tcg_constant_tl(0), tag); // clear the tag
+    gen_set_gpr_tagged(ctx, reg_num, t, 0, tag); // clear the tag
 }
 
 static void gen_set_gpri(DisasContext *ctx, int reg_num, target_long imm)
@@ -872,7 +886,7 @@ static bool gen_arith_imm_fn(DisasContext *ctx, arg_i *a, DisasExtend ext,
     if (get_ol(ctx) < MXL_RV128) {
         func(dest, src1, a->imm);
         if (get_ol(ctx) == MXL_RV64)
-            gen_set_gpr_tagged(ctx, a->rd, dest, get_gprh(ctx, a->rs1), cpu_gpr_tag[a->rs1]);
+            gen_set_gpr_tagged(ctx, a->rd, dest, a->rs1, cpu_gpr_tag[a->rs1]);
         else
             gen_set_gpr(ctx, a->rd, dest);
     } else {
@@ -901,7 +915,7 @@ static bool gen_arith_imm_tl(DisasContext *ctx, arg_i *a, DisasExtend ext,
     if (get_ol(ctx) < MXL_RV128) {
         func(dest, src1, src2);
         if (get_ol(ctx) == MXL_RV64)
-            gen_set_gpr_tagged(ctx, a->rd, dest, get_gprh(ctx, a->rs1), cpu_gpr_tag[a->rs1]);
+            gen_set_gpr_tagged(ctx, a->rd, dest, a->rs1, cpu_gpr_tag[a->rs1]);
         else
             gen_set_gpr(ctx, a->rd, dest);
     } else {
@@ -930,7 +944,7 @@ static bool gen_arith(DisasContext *ctx, arg_r *a, DisasExtend ext,
     if (get_ol(ctx) < MXL_RV128) {
         func(dest, src1, src2);
         if (get_ol(ctx) == MXL_RV64)
-            gen_set_gpr_tagged(ctx, a->rd, dest, get_gprh(ctx, a->rs1), cpu_gpr_tag[a->rs1]);
+            gen_set_gpr_tagged(ctx, a->rd, dest, a->rs1, cpu_gpr_tag[a->rs1]);
         else
             gen_set_gpr(ctx, a->rd, dest);
     } else {
