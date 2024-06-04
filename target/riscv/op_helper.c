@@ -987,6 +987,7 @@ uint64_t helper_store_with_cap(CPURISCVState *env, uint32_t rs1, uint32_t rs2,
         env->data_to_store_with_cap = cap_idx;
     } else {
         env->data_to_store_with_cap = env->gpr[rs2].val.scalar;
+        cap_mem_map_remove(&env->cm_map, env->gpr[rs1].val.scalar + imm);
     }
     return _helper_access_with_cap(env, rs1, rs2, imm, memop, true);
 }
