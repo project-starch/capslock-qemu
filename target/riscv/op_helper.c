@@ -685,26 +685,26 @@ void helper_csrevoke(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
 
     assert(rs1_v->tag);
-    assert(rs1_v->val.cap.type == CAP_TYPE_REV);
 
     bool is_linear = cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id);
     rs1_v->val.cap.type = is_linear ? CAP_TYPE_LIN : CAP_TYPE_UNINIT;
     rs1_v->val.cap.bounds.cursor = rs1_v->val.cap.bounds.base;
 }
 
-void helper_csmrev(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+// TODO: distinguish write borrow and read-only borrow
+void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
 
     assert(rs1_v->tag);
-    assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
+    // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
 
     if(rs1 != rd) {
         *rd_v = *rs1_v;
     }
 
-    rd_v->val.cap.type = CAP_TYPE_REV;
-    rd_v->val.cap.rev_node_id = cap_rev_tree_mrev(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+    rd_v->val.cap.type = rs1_v->val.cap.type;
+    rd_v->val.cap.rev_node_id = cap_rev_tree_borrow(&env->cr_tree, rs1_v->val.cap.rev_node_id);
 }
 
 void helper_csshrink(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
@@ -767,7 +767,7 @@ void helper_cssplit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2)
 
         rd_v->val.cap.bounds.base = mid;
         rd_v->val.cap.bounds.cursor = mid;
-        rd_v->val.cap.rev_node_id = cap_rev_tree_split(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+        rd_v->val.cap.rev_node_id = cap_rev_tree_split(&env->cr_tree, &rs1_v->val.cap.rev_node_id);
     }
 }
 
@@ -797,16 +797,6 @@ void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t pe
         // scrubbing the data
         cap_rev_tree_delin(&env->cr_tree, rd_v->val.cap.rev_node_id);
     }
-}
-
-void helper_csdelin(CPURISCVState *env, uint32_t rd) {
-    capregval_t *rd_v = &env->gpr[rd];
-
-    assert(rd_v->tag);
-    assert(rd_v->val.cap.type == CAP_TYPE_LIN);
-
-    rd_v->val.cap.type = CAP_TYPE_NONLIN;
-    cap_rev_tree_delin(&env->cr_tree, rd_v->val.cap.rev_node_id);
 }
 
 void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
@@ -943,6 +933,9 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32
             RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
             riscv_raise_exception(env, excp, GETPC());
         }
+
+        // TODO: add write revoke
+        cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id);
     } else if(env->priv == PRV_U) {
         addr = rs1_v->val.scalar + imm;
     } else {

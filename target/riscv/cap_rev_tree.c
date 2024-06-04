@@ -12,7 +12,7 @@ static cap_rev_node_id_t _cap_rev_tree_alloc_node(cap_rev_tree_t *tree) {
     return CAP_REV_NODE_ID_NULL;
 }
 
-static cap_rev_node_id_t _cap_rev_tree_dup_node_before(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
+static cap_rev_node_id_t _cap_rev_tree_dup_node_after(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
     assert(node_id != CAP_REV_NODE_ID_NULL);
     assert(_CAP_REV_NODE(tree, node_id).valid);
 
@@ -24,16 +24,39 @@ static cap_rev_node_id_t _cap_rev_tree_dup_node_before(cap_rev_tree_t *tree, cap
     _CAP_REV_NODE(tree, new_node).linear = true;
     _CAP_REV_NODE(tree, new_node).refcount = 1;
 
-    cap_rev_node_id_t prev = _CAP_REV_NODE(tree, node_id).prev;
-    _CAP_REV_NODE(tree, new_node).prev = prev;
-    if(prev != CAP_REV_NODE_ID_NULL) {
-        _CAP_REV_NODE(tree, prev).next = new_node;
+    cap_rev_node_id_t next = _CAP_REV_NODE(tree, node_id).next;
+    _CAP_REV_NODE(tree, new_node).next = next;
+    if(next != CAP_REV_NODE_ID_NULL) {
+        _CAP_REV_NODE(tree, next).prev = new_node;
     }
-    _CAP_REV_NODE(tree, new_node).next = node_id;
-    _CAP_REV_NODE(tree, node_id).prev = new_node;
+    _CAP_REV_NODE(tree, new_node).prev = node_id;
+    _CAP_REV_NODE(tree, node_id).next = new_node;
 
     return new_node;
 }
+
+// static cap_rev_node_id_t _cap_rev_tree_dup_node_before(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
+//     assert(node_id != CAP_REV_NODE_ID_NULL);
+//     assert(_CAP_REV_NODE(tree, node_id).valid);
+
+//     cap_rev_node_id_t new_node = _cap_rev_tree_alloc_node(tree);
+//     assert(new_node != CAP_REV_NODE_ID_NULL);
+
+//     _CAP_REV_NODE(tree, new_node).depth = _CAP_REV_NODE(tree, node_id).depth;
+//     _CAP_REV_NODE(tree, new_node).valid = true;
+//     _CAP_REV_NODE(tree, new_node).linear = true;
+//     _CAP_REV_NODE(tree, new_node).refcount = 1;
+
+//     cap_rev_node_id_t prev = _CAP_REV_NODE(tree, node_id).prev;
+//     _CAP_REV_NODE(tree, new_node).prev = prev;
+//     if(prev != CAP_REV_NODE_ID_NULL) {
+//         _CAP_REV_NODE(tree, prev).next = new_node;
+//     }
+//     _CAP_REV_NODE(tree, new_node).next = node_id;
+//     _CAP_REV_NODE(tree, node_id).prev = new_node;
+
+//     return new_node;
+// }
 
 cap_rev_node_id_t cap_rev_tree_create_lone_node(cap_rev_tree_t *tree) {
     cap_rev_node_id_t node = _cap_rev_tree_alloc_node(tree);
@@ -57,15 +80,21 @@ void cap_rev_tree_init(cap_rev_tree_t *tree,
 }
 
 
-cap_rev_node_id_t cap_rev_tree_mrev(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
-    cap_rev_node_id_t new_node = _cap_rev_tree_dup_node_before(tree, node_id);
-    _CAP_REV_NODE(tree, node_id).depth ++;
+cap_rev_node_id_t cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
+    cap_rev_node_id_t new_node = _cap_rev_tree_dup_node_after(tree, node_id);
+    _CAP_REV_NODE(tree, new_node).depth ++;
     return new_node;
 }
 
-cap_rev_node_id_t cap_rev_tree_split(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
-    cap_rev_node_id_t new_node = _cap_rev_tree_dup_node_before(tree, node_id);
-    return new_node;
+cap_rev_node_id_t cap_rev_tree_split(cap_rev_tree_t *tree, cap_rev_node_id_t *node_id) {
+    cap_rev_node_id_t node_a = _cap_rev_tree_dup_node_after(tree, *node_id);
+    cap_rev_node_id_t node_b = _cap_rev_tree_dup_node_after(tree, *node_id);
+
+    _CAP_REV_NODE(tree, node_a).depth ++;
+    _CAP_REV_NODE(tree, node_b).depth ++;
+    *node_id = node_a;
+
+    return node_b;
 }
 
 bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {

@@ -46,10 +46,10 @@ static bool trans_csrevoke(DisasContext *ctx, arg_csrevoke *a) {
     return true;
 }
 
-static bool trans_csmrev(DisasContext *ctx, arg_csmrev *a) {
+static bool trans_csborrow(DisasContext *ctx, arg_csborrow *a) {
     TCGv_i32 rd = tcg_constant_i32(a->rd);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-    gen_helper_csmrev(cpu_env, rd, rs1);
+    gen_helper_csborrow(cpu_env, rd, rs1);
     return true;
 }
 
@@ -82,12 +82,6 @@ static bool trans_cstighten(DisasContext *ctx, arg_cstighten *a) {
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
     TCGv_i32 imm = tcg_constant_i32(a->rs2);
     gen_helper_cstighten(cpu_env, rd, rs1, imm);
-    return true;
-}
-
-static bool trans_csdelin(DisasContext *ctx, arg_csdelin *a) {
-    TCGv_i32 rd = tcg_constant_i32(a->rd);
-    gen_helper_csdelin(cpu_env, rd);
     return true;
 }
 

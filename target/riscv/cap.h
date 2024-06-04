@@ -123,7 +123,7 @@ static inline bool capreg_allow_access(capregval_t* capreg, capaddr_t base, capa
 }
 
 static inline bool captype_is_copyable(captype_t ty) {
-    return ty == CAP_TYPE_NONLIN;
+    return ty == CAP_TYPE_NONLIN || ty == CAP_TYPE_LIN;
 }
 
 static inline void capregval_set_scalar(capregval_t* capreg, capaddr_t v) {
