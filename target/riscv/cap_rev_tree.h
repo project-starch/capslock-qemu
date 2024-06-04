@@ -12,6 +12,7 @@ static const cap_rev_node_id_t CAP_REV_NODE_ID_NULL = -1;
 struct CapRevNode {
     cap_rev_node_id_t prev, next;
     uint32_t depth;
+    bool mutable;
     bool valid;
     bool linear; /* does invalidating this node necessitate hiding the data */
     uint32_t refcount; /* how many associated capabilities */
@@ -30,15 +31,15 @@ void cap_rev_tree_init(cap_rev_tree_t *tree,
     cap_rev_node_id_t *pc_node, cap_rev_node_id_t *cap0_node, cap_rev_node_id_t *cap1_node);
 
 /* returns the node id for the new revocation capability */
-cap_rev_node_id_t cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_id_t node_id);
+cap_rev_node_id_t cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool mutable);
 /* returns if the resulting capability should be linear; if false, the
 capability should be uninitialised */
-bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id);
+bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool mutable);
 /* returns the node id for the new capability */
 cap_rev_node_id_t cap_rev_tree_split(cap_rev_tree_t *tree, cap_rev_node_id_t *node_id);
 
 /* creates a new tree with a new node as its root */
-cap_rev_node_id_t cap_rev_tree_create_lone_node(cap_rev_tree_t *tree);
+cap_rev_node_id_t cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable);
 
 void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_id_t node_id);
 
@@ -46,6 +47,12 @@ inline static bool cap_rev_tree_check_valid(cap_rev_tree_t *tree, cap_rev_node_i
     assert(node_id < tree->alloced_n);
     return _CAP_REV_NODE(tree, node_id).valid;
 }
+
+inline static bool cap_rev_tree_check_mutable(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
+    assert(node_id < tree->alloced_n);
+    return _CAP_REV_NODE(tree, node_id).valid && _CAP_REV_NODE(tree, node_id).mutable;
+}
+
 
 inline static void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
     assert(node_id < tree->alloced_n);

@@ -22,6 +22,7 @@ static cap_rev_node_id_t _cap_rev_tree_dup_node_after(cap_rev_tree_t *tree, cap_
     _CAP_REV_NODE(tree, new_node).depth = _CAP_REV_NODE(tree, node_id).depth;
     _CAP_REV_NODE(tree, new_node).valid = true;
     _CAP_REV_NODE(tree, new_node).linear = true;
+    _CAP_REV_NODE(tree, new_node).mutable = _CAP_REV_NODE(tree, node_id).mutable;
     _CAP_REV_NODE(tree, new_node).refcount = 1;
 
     cap_rev_node_id_t next = _CAP_REV_NODE(tree, node_id).next;
@@ -58,12 +59,13 @@ static cap_rev_node_id_t _cap_rev_tree_dup_node_after(cap_rev_tree_t *tree, cap_
 //     return new_node;
 // }
 
-cap_rev_node_id_t cap_rev_tree_create_lone_node(cap_rev_tree_t *tree) {
+cap_rev_node_id_t cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable) {
     cap_rev_node_id_t node = _cap_rev_tree_alloc_node(tree);
     _CAP_REV_NODE(tree, node).depth = 0;
     _CAP_REV_NODE(tree, node).refcount = 1;
     _CAP_REV_NODE(tree, node).prev = CAP_REV_NODE_ID_NULL;
     _CAP_REV_NODE(tree, node).next = CAP_REV_NODE_ID_NULL;
+    _CAP_REV_NODE(tree, node).mutable = mutable;
     _CAP_REV_NODE(tree, node).valid = true;
     _CAP_REV_NODE(tree, node).linear = true;
     return node;
@@ -74,15 +76,18 @@ void cap_rev_tree_init(cap_rev_tree_t *tree,
 {
     tree->alloced_n = 0;
 
-    *pc_node = cap_rev_tree_create_lone_node(tree);
-    *cap0_node = cap_rev_tree_create_lone_node(tree);
-    *cap1_node = cap_rev_tree_create_lone_node(tree);
+    *pc_node = cap_rev_tree_create_lone_node(tree, true);
+    *cap0_node = cap_rev_tree_create_lone_node(tree, true);
+    *cap1_node = cap_rev_tree_create_lone_node(tree, true);
 }
 
 
-cap_rev_node_id_t cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
+cap_rev_node_id_t cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool mutable) {
+    if (mutable && !_CAP_REV_NODE(tree, node_id).mutable)
+        return CAP_REV_NODE_ID_NULL;
     cap_rev_node_id_t new_node = _cap_rev_tree_dup_node_after(tree, node_id);
     _CAP_REV_NODE(tree, new_node).depth ++;
+    _CAP_REV_NODE(tree, new_node).mutable = mutable;
     return new_node;
 }
 
@@ -97,7 +102,7 @@ cap_rev_node_id_t cap_rev_tree_split(cap_rev_tree_t *tree, cap_rev_node_id_t *no
     return node_b;
 }
 
-bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
+bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool mutable) {
     assert(node_id != CAP_REV_NODE_ID_NULL);
     uint32_t depth = _CAP_REV_NODE(tree, node_id).depth;
     cap_rev_node_id_t cur;
@@ -107,13 +112,18 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
         cur = _CAP_REV_NODE(tree, cur).next)
     {
         retain_data = retain_data && !_CAP_REV_NODE(tree, cur).linear;
-        _CAP_REV_NODE(tree, cur).valid = false;
+        if (mutable)
+            _CAP_REV_NODE(tree, cur).valid = false;
+        else
+            _CAP_REV_NODE(tree, cur).mutable = false;
     }
 
-    // remove the subtree
-    _CAP_REV_NODE(tree, node_id).next = cur;
-    if(cur != CAP_REV_NODE_ID_NULL) {
-        _CAP_REV_NODE(tree, cur).prev = node_id;
+    if (mutable) {
+        // remove the subtree
+        _CAP_REV_NODE(tree, node_id).next = cur;
+        if(cur != CAP_REV_NODE_ID_NULL) {
+            _CAP_REV_NODE(tree, cur).prev = node_id;
+        }
     }
 
     return retain_data;

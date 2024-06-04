@@ -686,26 +686,42 @@ void helper_csrevoke(CPURISCVState *env, uint32_t rs1) {
 
     assert(rs1_v->tag);
 
-    bool is_linear = cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+    bool is_linear = cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, true);
     rs1_v->val.cap.type = is_linear ? CAP_TYPE_LIN : CAP_TYPE_UNINIT;
     rs1_v->val.cap.bounds.cursor = rs1_v->val.cap.bounds.base;
 }
 
-// TODO: distinguish write borrow and read-only borrow
 void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
 
     assert(rs1_v->tag);
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
+    cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, false);
 
     if(rs1 != rd) {
         *rd_v = *rs1_v;
     }
 
-    rd_v->val.cap.type = rs1_v->val.cap.type;
-    rd_v->val.cap.rev_node_id = cap_rev_tree_borrow(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+    rd_v->val.cap.rev_node_id = cap_rev_tree_borrow(&env->cr_tree, rs1_v->val.cap.rev_node_id, false);
 }
+
+
+void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+    capregval_t *rd_v = &env->gpr[rd];
+    capregval_t *rs1_v = &env->gpr[rs1];
+
+    assert(rs1_v->tag);
+    // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
+    cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, true);
+
+    if(rs1 != rd) {
+        *rd_v = *rs1_v;
+    }
+
+    rd_v->val.cap.rev_node_id = cap_rev_tree_borrow(&env->cr_tree, rs1_v->val.cap.rev_node_id, true);
+}
+
 
 void helper_csshrink(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
     capregval_t *rd_v = &env->gpr[rd];
@@ -758,6 +774,9 @@ void helper_cssplit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2)
     capaddr_t mid = rs2_v->val.scalar;
 
     assert(mid > rs1_v->val.cap.bounds.base && mid < rs1_v->val.cap.bounds.end);
+
+    bool mutable = cap_rev_tree_check_mutable(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+    cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, mutable);
 
     if(rs1 != rd) {
         *rd_v = *rs1_v;
@@ -934,8 +953,12 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32
             riscv_raise_exception(env, excp, GETPC());
         }
 
-        // TODO: add write revoke
-        cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+        if (is_store && !cap_rev_tree_check_mutable(&env->cr_tree, rs1_v->val.cap.rev_node_id)) {
+            CAPSTONE_DEBUG_PRINT("Attempting to use immutable or invalid capability for storing data!\n");
+            riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_ACCESS_FAULT, GETPC());
+        }
+
+        cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, is_store);
     } else if(env->priv == PRV_U) {
         addr = rs1_v->val.scalar + imm;
     } else {
@@ -1237,7 +1260,7 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
     cap->async = 0;
     cap->perms = CAP_PERMS_RWX;
     cap->type = CAP_TYPE_LIN;
-    cap->rev_node_id = cap_rev_tree_create_lone_node(&env->cr_tree);
+    cap->rev_node_id = cap_rev_tree_create_lone_node(&env->cr_tree, true);
     rd_v->tag = true;
 }
 

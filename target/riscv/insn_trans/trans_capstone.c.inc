@@ -53,6 +53,13 @@ static bool trans_csborrow(DisasContext *ctx, arg_csborrow *a) {
     return true;
 }
 
+static bool trans_csborrowmut(DisasContext *ctx, arg_csborrowmut *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    gen_helper_csborrowmut(cpu_env, rd, rs1);
+    return true;
+}
+
 static bool trans_csshrink(DisasContext *ctx, arg_csshrink *a) {
     TCGv_i32 rd = tcg_constant_i32(a->rd);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
