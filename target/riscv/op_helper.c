@@ -644,16 +644,18 @@ void helper_cslcc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t imm) {
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
 
-    assert(rs1_v->tag);
-    assert(imm != 2 || rs1_v->val.cap.type != CAP_TYPE_SEALED);
-    assert(imm != 4 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
-    assert(imm != 5 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
-    assert(imm != 6 || rs1_v->val.cap.type == CAP_TYPE_SEALED || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
-    assert(imm != 7 || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
+    if (imm != 8) {
+        assert(rs1_v->tag);
+        assert(imm != 2 || rs1_v->val.cap.type != CAP_TYPE_SEALED);
+        assert(imm != 4 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
+        assert(imm != 5 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
+        assert(imm != 6 || rs1_v->val.cap.type == CAP_TYPE_SEALED || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
+        assert(imm != 7 || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
+    }
 
     switch(imm) {
         case 0:
-            capregval_set_scalar(rd_v, 1); // TODO: let's say it's always valid for now
+            capregval_set_scalar(rd_v, cap_rev_tree_check_valid(&env->cr_tree, rs1_v->val.cap.rev_node_id) ? 1 : 0); // TODO: let's say it's always valid for now
             break;
         case 1:
             capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.type);
@@ -675,6 +677,9 @@ void helper_cslcc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t imm) {
             break;
         case 7:
             capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.reg);
+            break;
+        case 8:
+            capregval_set_scalar(rd_v, rs1_v->tag ? 1 : 0);
             break;
         default:
             capregval_set_scalar(rd_v, 0);
