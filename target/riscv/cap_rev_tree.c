@@ -108,7 +108,7 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool m
     cap_rev_node_id_t cur;
     bool retain_data = true;
     for(cur = _CAP_REV_NODE(tree, node_id).next;
-        cur != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, node_id).depth > depth;
+        cur != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, cur).depth > depth;
         cur = _CAP_REV_NODE(tree, cur).next)
     {
         retain_data = retain_data && !_CAP_REV_NODE(tree, cur).linear;

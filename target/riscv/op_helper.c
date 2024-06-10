@@ -958,9 +958,14 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32
             riscv_raise_exception(env, excp, GETPC());
         }
 
-        if (is_store && !cap_rev_tree_check_mutable(&env->cr_tree, rs1_v->val.cap.rev_node_id)) {
-            CAPSTONE_DEBUG_PRINT("Attempting to use immutable or invalid capability for storing data!\n");
+        if (is_store && !cap_rev_tree_check_mutable(&env->cr_tree, cap->rev_node_id)) {
+            CAPSTONE_DEBUG_PRINT("Attempting to use immutable or invalid capability for store!\n");
             riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_ACCESS_FAULT, GETPC());
+        }
+
+        if (!is_store && !cap_rev_tree_check_valid(&env->cr_tree, cap->rev_node_id)) {
+            CAPSTONE_DEBUG_PRINT("Attempting to use an invalid capability for load!\n");
+            riscv_raise_exception(env, RISCV_EXCP_LOAD_ACCESS_FAULT, GETPC());
         }
 
         cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, is_store);
