@@ -644,15 +644,20 @@ void helper_cslcc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t imm) {
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
 
+    bool check_passed = true;
     if (imm != 8) {
-        assert(rs1_v->tag);
-        assert(imm != 2 || rs1_v->val.cap.type != CAP_TYPE_SEALED);
-        assert(imm != 4 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
-        assert(imm != 5 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
-        assert(imm != 6 || rs1_v->val.cap.type == CAP_TYPE_SEALED || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
-        assert(imm != 7 || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
+        check_passed = check_passed && rs1_v->tag;
+        check_passed = check_passed && (imm != 2 || rs1_v->val.cap.type != CAP_TYPE_SEALED);
+        check_passed = check_passed && (imm != 4 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
+        check_passed = check_passed && (imm != 5 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
+        check_passed = check_passed && (imm != 6 || rs1_v->val.cap.type == CAP_TYPE_SEALED || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
+        check_passed = check_passed && (imm != 7 || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
     }
-
+    if (!check_passed) {
+        CAPSTONE_DEBUG_PRINT("Invalid operands to lcc!\n");
+        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
+        return;
+    }
     switch(imm) {
         case 0:
             capregval_set_scalar(rd_v, cap_rev_tree_check_valid(&env->cr_tree, rs1_v->val.cap.rev_node_id) ? 1 : 0); // TODO: let's say it's always valid for now
@@ -700,6 +705,8 @@ void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
 
+    CAPSTONE_DEBUG_INFO("Borrow %u <- %u\n", rd, rs1);
+
     assert(rs1_v->tag);
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
     cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, false);
@@ -715,6 +722,8 @@ void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
 void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
+
+    CAPSTONE_DEBUG_INFO("Borrowmut %u <- %u\n", rd, rs1);
 
     assert(rs1_v->tag);
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
@@ -936,6 +945,16 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
 
 #define CAPSTONE_IMM12_SEXT(x) ((x) | (((-((x) >> 11)) << 12)))
 
+// #define CAPSTONE_EXCP_IS_BREAKPOINT
+
+inline static void riscv_raise_exception_bp(CPURISCVState *env, RISCVException excp, uintptr_t pc) {
+    #ifdef CAPSTONE_EXCP_IS_BREAKPOINT
+        riscv_raise_exception(env, RISCV_EXCP_BREAKPOINT, pc);
+    #else
+        riscv_raise_exception(env, excp, pc);
+    #endif
+}
+
 static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32_t rs2, uint64_t imm, uint32_t memop, bool is_store) {
     // CAPSTONE_DEBUG_PRINT("Cap mem access %u %lx\n", rs1, imm);
 
@@ -949,23 +968,24 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32
         imm = CAPSTONE_IMM12_SEXT(imm); // sign extend
         addr = cap->bounds.cursor + imm;
 
+        CAPSTONE_DEBUG_INFO("Memacc (%s) with cap\n", is_store ? "store" : "load");
         // CAPSTONE_DEBUG_PRINT("Cap mem access addr = %lx, size = %lu\n", addr, (capaddr_t)size);
         // TODO: bounds check only for now
         if(!cap_in_bounds(&cap->bounds, addr, (capaddr_t)size)) {
             CAPSTONE_DEBUG_PRINT("Cap mem access OOB: addr = %lx, size = %lu, bounds = (%lx, %lx)\n", addr, (capaddr_t)size,
                 cap->bounds.base, cap->bounds.end);
             RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
-            riscv_raise_exception(env, excp, GETPC());
+            riscv_raise_exception_bp(env, excp, GETPC());
         }
 
         if (is_store && !cap_rev_tree_check_mutable(&env->cr_tree, cap->rev_node_id)) {
             CAPSTONE_DEBUG_PRINT("Attempting to use immutable or invalid capability for store!\n");
-            riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_ACCESS_FAULT, GETPC());
+            riscv_raise_exception_bp(env, RISCV_EXCP_STORE_AMO_ACCESS_FAULT, GETPC());
         }
 
         if (!is_store && !cap_rev_tree_check_valid(&env->cr_tree, cap->rev_node_id)) {
             CAPSTONE_DEBUG_PRINT("Attempting to use an invalid capability for load!\n");
-            riscv_raise_exception(env, RISCV_EXCP_LOAD_ACCESS_FAULT, GETPC());
+            riscv_raise_exception_bp(env, RISCV_EXCP_LOAD_ACCESS_FAULT, GETPC());
         }
 
         cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, is_store);
@@ -973,7 +993,7 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32
         addr = rs1_v->val.scalar + imm;
     } else {
         CAPSTONE_DEBUG_PRINT("Cap mem access requires capability\n");
-        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+        riscv_raise_exception_bp(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
     }
 
 
@@ -981,12 +1001,18 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32
         // accessing capabilities in memory, extra checks needed
         // check alignment
         if(is_store) {
+            if(env->gpr[rs2].tag) {
+                CAPSTONE_DEBUG_INFO("Cap stored to 0x%lx from %u\n", addr, rs2);
+            }
             if (env->gpr[rs2].tag && (addr & 7)) {
                 CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
                 riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_ADDR_MIS, GETPC());
             }
         } else {
             env->load_is_cap = cap_mem_map_query(&env->cm_map, addr, &env->load_cap_bounds);
+            if(env->load_is_cap) {
+                CAPSTONE_DEBUG_INFO("Cap loaded from %lx\n", addr);
+            }
             if(env->load_is_cap && (addr & 7)) {
                 CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
                 riscv_raise_exception(env, RISCV_EXCP_LOAD_ADDR_MIS, GETPC());
@@ -1316,6 +1342,7 @@ void helper_csdebugcountprint(CPURISCVState *env) {
 }
 
 void helper_move_cap(CPURISCVState *env, uint64_t v, uint32_t rd_v, uint32_t rs1_v) {
+    CAPSTONE_DEBUG_INFO("Cap moved from %u to %u\n", rs1_v, rd_v);
     env->gpr[rd_v].val = env->gpr[rs1_v].val;
     env->gpr[rd_v].val.scalar = v;
 }

@@ -1,7 +1,15 @@
 #ifndef _CAPSTONE_DEFS_H_
 #define _CAPSTONE_DEFS_H_
 
+#define CAPSTONE_DEBUG_INFO_EN
+
 #define CAPSTONE_DEBUG_PRINT(fmt, ...) fprintf(stderr, "[CAPSTONE] " fmt, ##__VA_ARGS__)
+#ifdef CAPSTONE_DEBUG_INFO_EN
+#define CAPSTONE_DEBUG_INFO(fmt, ...) fprintf(stderr, "[CAPSTONE] " fmt, ##__VA_ARGS__)
+#else
+#deifne CAPSTONE_DEBUG_INFO {}
+#endif
+
 #define STATIC_ASSERT(COND, MSG) typedef char static_assertion_##MSG[(COND)?1:-1]
 
 enum CapstoneCCSRId {
