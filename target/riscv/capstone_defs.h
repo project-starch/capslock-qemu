@@ -7,7 +7,7 @@
 #ifdef CAPSTONE_DEBUG_INFO_EN
 #define CAPSTONE_DEBUG_INFO(fmt, ...) fprintf(stderr, "[CAPSTONE] " fmt, ##__VA_ARGS__)
 #else
-#deifne CAPSTONE_DEBUG_INFO {}
+#define CAPSTONE_DEBUG_INFO(fmt, ...) {}
 #endif
 
 #define STATIC_ASSERT(COND, MSG) typedef char static_assertion_##MSG[(COND)?1:-1]
