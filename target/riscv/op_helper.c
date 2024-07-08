@@ -955,25 +955,22 @@ inline static void riscv_raise_exception_bp(CPURISCVState *env, RISCVException e
     #endif
 }
 
-static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32_t rs2, uint64_t imm, uint32_t memop, bool is_store) {
+static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint32_t rs2, uint32_t memop, bool is_store) {
     // CAPSTONE_DEBUG_PRINT("Cap mem access %u %lx\n", rs1, imm);
 
     capregval_t *rs1_v = &env->gpr[rs1];
 
-    capaddr_t addr;
     unsigned size = memop_size((MemOp)memop);
 
     if(rs1_v->tag) {
         capfat_t *cap = &rs1_v->val.cap;
-        imm = CAPSTONE_IMM12_SEXT(imm); // sign extend
-        addr = cap->bounds.cursor + imm;
 
-        CAPSTONE_DEBUG_INFO("Memacc (%s) with cap\n", is_store ? "store" : "load");
+        CAPSTONE_DEBUG_INFO("Memacc (%s) with cap at %lx %lu\n", is_store ? "store" : "load", addr, (capaddr_t)size);
         // CAPSTONE_DEBUG_PRINT("Cap mem access addr = %lx, size = %lu\n", addr, (capaddr_t)size);
         // TODO: bounds check only for now
         if(!cap_in_bounds(&cap->bounds, addr, (capaddr_t)size)) {
-            CAPSTONE_DEBUG_PRINT("Cap mem access OOB: addr = %lx, size = %lu, bounds = (%lx, %lx)\n", addr, (capaddr_t)size,
-                cap->bounds.base, cap->bounds.end);
+            CAPSTONE_DEBUG_PRINT("Cap mem access OOB: addr = %lx, size = %lu, bounds = (%lx, %lx) @ pc = %lx\n", addr, (capaddr_t)size,
+                cap->bounds.base, cap->bounds.end, env->pc);
             RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
             riscv_raise_exception_bp(env, excp, GETPC());
         }
@@ -989,12 +986,11 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32
         }
 
         cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, is_store);
-    } else if(env->priv == PRV_U) {
-        addr = rs1_v->val.scalar + imm;
-    } else {
-        CAPSTONE_DEBUG_PRINT("Cap mem access requires capability\n");
-        riscv_raise_exception_bp(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
     }
+    // else {
+    //     CAPSTONE_DEBUG_PRINT("Cap mem access requires capability\n");
+    //     riscv_raise_exception_bp(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+    // }
 
 
     if(size == 8) {
@@ -1020,28 +1016,32 @@ static uint64_t _helper_access_with_cap(CPURISCVState *env, uint32_t rs1, uint32
         }
     }
 
-    return addr;
-
 }
 
-uint64_t helper_load_with_cap(CPURISCVState *env, uint32_t rs1, uint64_t imm, uint32_t memop) {
-    return _helper_access_with_cap(env, rs1, 0, imm, memop, false);
+void helper_load_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint32_t memop) {
+    _helper_access_with_cap(env, addr, rs1, 0, memop, false);
 }
 
 
-uint64_t helper_store_with_cap(CPURISCVState *env, uint32_t rs1, uint32_t rs2,
-                        uint64_t imm, uint32_t memop) {
+void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint32_t rs2,
+                        uint32_t memop, uint32_t use_cap) {
+    // if (rs2 == 10 && lcced) {
+    //     CAPSTONE_DEBUG_PRINT("x10 stored to 0x%lx\n", addr);
+    // }
+    // if (env->gpr[rs2].tag && (addr & 0xfff0000000000000) != 0xff20000000000000) {
     if (env->gpr[rs2].tag) {
         // contains a capability
         int cap_idx = cap_map_alloc();
         *cap_map_get(cap_idx) = env->gpr[rs2].val.cap;
-        cap_mem_map_add(&env->cm_map, env->gpr[rs1].val.scalar + imm, &env->gpr[rs2].val.cap.bounds);
+        cap_mem_map_add(&env->cm_map, addr, &env->gpr[rs2].val.cap.bounds);
         env->data_to_store_with_cap = cap_idx;
     } else {
         env->data_to_store_with_cap = env->gpr[rs2].val.scalar;
-        cap_mem_map_remove(&env->cm_map, env->gpr[rs1].val.scalar + imm);
+        cap_mem_map_remove(&env->cm_map, addr);
     }
-    return _helper_access_with_cap(env, rs1, rs2, imm, memop, true);
+    if (use_cap) {
+        _helper_access_with_cap(env, addr, rs1, rs2, memop, true);
+    }
 }
 
 // check if the location has a capability, if it does, retrieve it from the cap map
@@ -1312,7 +1312,8 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
     if(rs1_v->tag) {
         // only printing the bounds for now
-        CAPSTONE_DEBUG_PRINT("Print = Cap(%d, %d, 0x%x, 0x%lx, 0x%lx, 0x%lx)\n",
+        CAPSTONE_DEBUG_PRINT("Print %u = Cap(%d, %d, 0x%x, 0x%lx, 0x%lx, 0x%lx)\n",
+                            rs1,
                             cap_rev_tree_check_valid(&env->cr_tree, rs1_v->val.cap.rev_node_id),
                             rs1_v->val.cap.type,
                             rs1_v->val.cap.perms,
@@ -1320,7 +1321,7 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
                             rs1_v->val.cap.bounds.base,
                             rs1_v->val.cap.bounds.end);
     } else {
-        CAPSTONE_DEBUG_PRINT("Print = Scalar(0x%lx)\n", rs1_v->val.scalar);
+        CAPSTONE_DEBUG_PRINT("Print %u = Scalar(0x%lx)\n", rs1, rs1_v->val.scalar);
     }
 }
 

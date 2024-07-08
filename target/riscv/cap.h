@@ -89,7 +89,7 @@ struct CapRegVal {
         capaddr_t scalar;
     } val;
 
-    bool tag; // true: capability
+    uint32_t tag; // true: capability
 };
 
 capfat_t *cap_map_get(int idx);

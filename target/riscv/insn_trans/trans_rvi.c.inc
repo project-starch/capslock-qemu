@@ -268,15 +268,14 @@ static bool gen_load_tl_with_cap(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
     // TODO: use helper for now for straightforward implementation
     // can improve the performance later
-    TCGv addr = tcg_temp_new();
+    TCGv addr = get_address(ctx, a->rs1, a->imm);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-    TCGv imm = tcg_constant_tl(a->imm);
     TCGv dest = dest_gpr(ctx, a->rd);
     TCGv_i32 memop_v = tcg_constant_i32((int)memop);
     TCGv_i32 rd = tcg_constant_i32(a->rd);
 
     // TODO: memop also needs to be checked here
-    gen_helper_load_with_cap(addr, cpu_env, rs1, imm, memop_v);
+    gen_helper_load_with_cap(cpu_env, addr, rs1, memop_v);
     tcg_gen_qemu_ld_tl(dest, addr, ctx->mem_idx, memop);
     gen_set_gpr(ctx, a->rd, dest);
 
@@ -293,7 +292,7 @@ static bool gen_load(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
     // TODO: support capability-based addressing
     decode_save_opc(ctx);
-    if (ctx->priv == PRV_U) {
+    if (ctx->priv == PRV_U || (memop & MO_SIZE) == MO_64) {
         // we need to use Capstone capabilities
         return gen_load_tl_with_cap(ctx, a, memop);
     } else {
@@ -360,8 +359,15 @@ static bool gen_store_tl(DisasContext *ctx, arg_sb *a, MemOp memop)
     TCGv data = get_gpr(ctx, a->rs2, EXT_NONE);
     TCGv_i32 memop_v = tcg_constant_i32(memop);
 
-    tcg_gen_qemu_st_tl(data, addr, ctx->mem_idx, memop);
-    gen_helper_remove_cap_mem_map(cpu_env, addr, memop_v);
+    if ((memop & MO_SIZE) == MO_64) {
+        gen_helper_store_with_cap(cpu_env, addr, tcg_constant_i32(a->rs1),
+            tcg_constant_i32(a->rs2), memop_v, tcg_constant_i32(0));
+        tcg_gen_qemu_st_tl(data_to_store_with_cap, addr, ctx->mem_idx, memop);
+    } else {
+        tcg_gen_qemu_st_tl(data, addr, ctx->mem_idx, memop);
+        gen_helper_remove_cap_mem_map(cpu_env, addr, memop_v);
+    }
+
     return true;
 }
 
@@ -387,13 +393,12 @@ static bool gen_store_i128(DisasContext *ctx, arg_sb *a, MemOp memop)
 
 static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
-    TCGv addr = tcg_temp_new();
+    TCGv addr = get_address(ctx, a->rs1, a->imm);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
     TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
-    TCGv imm = tcg_constant_tl(a->imm);
     TCGv_i32 memop_v = tcg_constant_i32((int)memop);
 
-    gen_helper_store_with_cap(addr, cpu_env, rs1, rs2, imm, memop_v);
+    gen_helper_store_with_cap(cpu_env, addr, rs1, rs2, memop_v, tcg_constant_i32(1));
     tcg_gen_qemu_st_tl(data_to_store_with_cap, addr, ctx->mem_idx, memop);
     // gen_helper_remove_cap_mem_map(cpu_env, addr, memop_v);
     // gen_helper_capstone_debugger(); // just to signal the end of the execution
