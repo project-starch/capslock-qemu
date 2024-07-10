@@ -835,9 +835,10 @@ void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t pe
 void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
 
-    assert(rs1_v->tag);
-
-    cap_rev_tree_invalidate(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+    if (rs1_v->tag) {
+        cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, true);
+        cap_rev_tree_invalidate(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+    }
 }
 
 void helper_csinit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
