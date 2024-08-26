@@ -388,7 +388,7 @@ struct CPUArchState {
 
     bool cap_mem; /* temporary: use capabilities for memory accesses */
 
-    cap_mem_map_t cm_map; /* maintains locations of capabilities in memory */
+    // cap_mem_map_t cm_map; /* maintains locations of capabilities in memory */
     cap_rev_tree_t cr_tree; /* capability revocation tree */
 
     target_ulong data_to_store_with_cap;

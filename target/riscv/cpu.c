@@ -422,7 +422,7 @@ static void rv64_base_cpu_init(Object *obj)
         env->cpmp[i].tag = false;
     }
 
-    cap_mem_map_init(&env->cm_map);
+    cap_mem_map_init(&cm_map);
 }
 
 static void rv64_sifive_u_cpu_init(Object *obj)

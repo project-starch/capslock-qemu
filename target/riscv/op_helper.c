@@ -707,7 +707,10 @@ void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
 
     CAPSTONE_DEBUG_INFO("Borrow %u <- %u\n", rd, rs1);
 
-    assert(rs1_v->tag);
+    if (!rs1_v->tag) {
+        *rd_v = *rs1_v;
+        return;
+    }
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
     cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, false);
 
@@ -725,7 +728,10 @@ void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
 
     CAPSTONE_DEBUG_INFO("Borrowmut %u <- %u\n", rd, rs1);
 
-    assert(rs1_v->tag);
+    if (!rs1_v->tag) {
+        *rd_v = *rs1_v;
+        return;
+    }
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
     cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, true);
 
@@ -833,6 +839,7 @@ void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t pe
 }
 
 void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
+    CAPSTONE_DEBUG_PRINT("Dropping capability in %u\n", rs1);
     capregval_t *rs1_v = &env->gpr[rs1];
 
     if (rs1_v->tag) {
@@ -1006,7 +1013,7 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
                 riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_ADDR_MIS, GETPC());
             }
         } else {
-            env->load_is_cap = cap_mem_map_query(&env->cm_map, addr, &env->load_cap_bounds);
+            env->load_is_cap = cap_mem_map_query(&cm_map, addr, NULL);
             if(env->load_is_cap) {
                 CAPSTONE_DEBUG_INFO("Cap loaded from %lx\n", addr);
             }
@@ -1030,15 +1037,30 @@ void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint
     //     CAPSTONE_DEBUG_PRINT("x10 stored to 0x%lx\n", addr);
     // }
     // if (env->gpr[rs2].tag && (addr & 0xfff0000000000000) != 0xff20000000000000) {
+    // if (cap_mem_map_query(&cm_map, addr, &cap)) {
+        // overwriting a capability
+        // CPUState *cs = env_cpu(env);
+        // MemTxResult res;
+        // uintptr_t cap_idx = address_space_ldq(cs->as, addr, MEMTXATTRS_UNSPECIFIED, &res);
+        // fprintf(stderr, "Bl %u\n", res);
+        // assert(res == MEMTX_OK);
+        // if (res == MEMTX_OK) {
+            // fprintf(stderr, "Cap idx = %lx %lu\n", addr, cap_idx);
+            // cap_map_free((int)cap_idx);
+        // } else {
+        //     fprintf(stderr, "Bad cap %lx\n", addr);
+        // }
+    // }
     if (env->gpr[rs2].tag) {
         // contains a capability
-        int cap_idx = cap_map_alloc();
-        *cap_map_get(cap_idx) = env->gpr[rs2].val.cap;
-        cap_mem_map_add(&env->cm_map, addr, &env->gpr[rs2].val.cap.bounds);
-        env->data_to_store_with_cap = cap_idx;
+        // int cap_idx = cap_map_alloc();
+        // *cap_map_get(cap_idx) = env->gpr[rs2].val.cap;
+        cap_mem_map_add(&cm_map, addr, &env->gpr[rs2].val.cap);
+        env->data_to_store_with_cap = env->gpr[rs2].val.scalar;
+        // fprintf(stderr, "Encap idx = %lx %d\n\n", addr, cap_idx);
     } else {
         env->data_to_store_with_cap = env->gpr[rs2].val.scalar;
-        cap_mem_map_remove(&env->cm_map, addr);
+        cap_mem_map_remove(&cm_map, addr);
     }
     if (use_cap) {
         _helper_access_with_cap(env, addr, rs1, rs2, memop, true);
@@ -1047,9 +1069,10 @@ void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint
 
 // check if the location has a capability, if it does, retrieve it from the cap map
 void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd) {
-    if (cap_mem_map_query(&env->cm_map, addr, NULL)) {
+    capfat_t cap;
+    if (cap_mem_map_query(&cm_map, addr, &cap)) {
         env->gpr[rd].tag = true;
-        env->gpr[rd].val.cap = *cap_map_get((int)env->gpr[rd].val.scalar);
+        env->gpr[rd].val.cap = cap;
     } else {
         env->gpr[rd].tag = false;
     }
@@ -1085,14 +1108,14 @@ void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd) {
 void helper_set_cap_mem_map(CPURISCVState *env, uint32_t reg, uint64_t addr, uint64_t to_set) {
     capregval_t *reg_v = &env->gpr[reg];
     if (to_set) {
-        cap_mem_map_add(&env->cm_map, addr, &reg_v->val.cap.bounds);
+        cap_mem_map_add(&cm_map, addr, &reg_v->val.cap);
     } else {
-        cap_mem_map_remove(&env->cm_map, addr);
+        cap_mem_map_remove(&cm_map, addr);
     }
 }
 
 void helper_remove_cap_mem_map(CPURISCVState *env, uint64_t addr, uint32_t memop) {
-    cap_mem_map_remove_range(&env->cm_map, addr, memop_size((MemOp)memop));
+    cap_mem_map_remove_range(&cm_map, addr, memop_size((MemOp)memop));
 }
 
 /* helpers for Capstone control transfer instructions */
@@ -1306,7 +1329,7 @@ void helper_csdebugoncapmem(CPURISCVState *env, uint64_t rs1_v) {
 }
 
 void helper_csdebugclearcmmap(CPURISCVState *env) {
-    cap_mem_map_clear(&env->cm_map);
+    cap_mem_map_clear(&cm_map);
 }
 
 void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {

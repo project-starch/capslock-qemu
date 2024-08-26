@@ -14,13 +14,13 @@ static cap_rev_node_id_t _cap_rev_tree_alloc_node(cap_rev_tree_t *tree) {
 
 static cap_rev_node_id_t _cap_rev_tree_dup_node_after(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
     assert(node_id != CAP_REV_NODE_ID_NULL);
-    assert(_CAP_REV_NODE(tree, node_id).valid);
+    // assert(_CAP_REV_NODE(tree, node_id).valid);
 
     cap_rev_node_id_t new_node = _cap_rev_tree_alloc_node(tree);
     assert(new_node != CAP_REV_NODE_ID_NULL);
 
     _CAP_REV_NODE(tree, new_node).depth = _CAP_REV_NODE(tree, node_id).depth;
-    _CAP_REV_NODE(tree, new_node).valid = true;
+    _CAP_REV_NODE(tree, new_node).valid = _CAP_REV_NODE(tree, node_id).valid;
     _CAP_REV_NODE(tree, new_node).linear = true;
     _CAP_REV_NODE(tree, new_node).mutable = _CAP_REV_NODE(tree, node_id).mutable;
     _CAP_REV_NODE(tree, new_node).refcount = 1;

@@ -25,20 +25,20 @@ void store_cap(AddressSpace *as, CPURISCVState *env, hwaddr addr, capfat_t *cap)
     cap_compress(cap, &lo, &hi);
     address_space_stq(as, addr, lo, attrs, &res);
     address_space_stq(as, addr + 8, hi, attrs, &res);
-    cap_mem_map_add(&env->cm_map, addr, &cap->bounds);
+    cap_mem_map_add(&cm_map, addr, cap);
 }
 
 void load_capregval(AddressSpace *as, CPURISCVState *env, hwaddr addr, capregval_t *v) {
     MemTxResult res;
     MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
     uint64_t lo, hi;
-    capboundsfat_t bounds;
-    if(cap_mem_map_query(&env->cm_map, addr, &bounds)) {
+    // capboundsfat_t bounds;
+    if(cap_mem_map_query(&cm_map, addr, &v->val.cap)) {
         lo = address_space_ldq(as, addr, attrs, &res);
         hi = address_space_ldq(as, addr + 8, attrs, &res);
         v->tag = true;
         cap_uncompress(lo, hi, &v->val.cap);
-        memcpy(&v->val.cap.bounds, &bounds, sizeof(capboundsfat_t));
+        // memcpy(&v->val.cap.bounds, &bounds, sizeof(capboundsfat_t));
     } else {
         v->tag = false;
         v->val.scalar = address_space_ldq(as, addr, attrs, &res);
@@ -54,10 +54,10 @@ void store_capregval(AddressSpace *as, CPURISCVState *env, hwaddr addr, capregva
         cap_compress(&v->val.cap, &lo, &hi);
         address_space_stq(as, addr, lo, attrs, &res);
         address_space_stq(as, addr + 8, hi, attrs, &res);
-        cap_mem_map_add(&env->cm_map, addr, &v->val.cap.bounds);
+        cap_mem_map_add(&cm_map, addr, &v->val.cap);
     } else {
         address_space_stq(as, addr, v->val.scalar, attrs, &res);
-        cap_mem_map_remove(&env->cm_map, addr);
+        cap_mem_map_remove(&cm_map, addr);
     }
 }
 
@@ -146,7 +146,7 @@ void swap_domain_scoped_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_a
     SWAP_INT64(satp);
 
     // above is identical to C-scoped regs
-    
+
     tlb_flush(env_cpu(env)); // because satp has been changed
 
     QEMU_IOTHREAD_LOCK_GUARD(); // TODO: is this the right place?
@@ -163,7 +163,7 @@ void swap_c_effective_regs(AddressSpace *as, CPURISCVState *env, hwaddr base_add
     // swap CCSRs
     SWAP_CAP(ctvec);
     SWAP_CAP(cscratch);
-    
+
     assert(!((env->mstatus >> 38) & 3)); // the bits are actually unused
     assert((env->mstatus >> 34) & 3);
     uint64_t mstatus_priv = env->mstatus | ((uint64_t)env->priv << 38);
