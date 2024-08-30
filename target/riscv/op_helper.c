@@ -1030,6 +1030,9 @@ void helper_load_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint3
     _helper_access_with_cap(env, addr, rs1, 0, memop, false);
 }
 
+void helper_cap_scrub(CPURISCVState *env, uint64_t addr) {
+    cap_mem_map_remove(&cm_map, addr);
+}
 
 void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint32_t rs2,
                         uint32_t memop, uint32_t use_cap) {
@@ -1312,6 +1315,7 @@ void helper_cscapenter(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
 
 void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
     // CAPSTONE_DEBUG_PRINT("Generating cap with (0x%lx, 0x%lx)\n", rs1_v, rs2_v);
+    fprintf(stderr, "G %lx %lx\n", rs1_v, rs2_v);
     capregval_t *rd_v = &env->gpr[rd];
     capfat_t *cap = &rd_v->val.cap;
     cap->bounds.base = rs1_v;
@@ -1371,5 +1375,3 @@ void helper_move_cap(CPURISCVState *env, uint64_t v, uint32_t rd_v, uint32_t rs1
     env->gpr[rd_v].val = env->gpr[rs1_v].val;
     env->gpr[rd_v].val.scalar = v;
 }
-
-

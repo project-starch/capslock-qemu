@@ -456,6 +456,9 @@ static void gen_set_gpri(DisasContext *ctx, int reg_num, target_long imm)
         if (get_xl_max(ctx) == MXL_RV128) {
             tcg_gen_movi_tl(cpu_gprh[reg_num], -(imm < 0));
         }
+
+        TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
+        tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
     }
 }
 

@@ -88,6 +88,7 @@ static bool gen_amo(DisasContext *ctx, arg_atomic *a,
 
     decode_save_opc(ctx);
     src1 = get_address(ctx, a->rs1, 0);
+    gen_helper_cap_scrub(cpu_env, src1);
     func(dest, src1, src2, ctx->mem_idx, mop);
 
     gen_set_gpr(ctx, a->rd, dest);
