@@ -1013,9 +1013,10 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
                 riscv_raise_exception(env, RISCV_EXCP_STORE_AMO_ADDR_MIS, GETPC());
             }
         } else {
-            env->load_is_cap = cap_mem_map_query(&cm_map, addr, NULL);
+            uint64_t paddr = (uint64_t)capstone_get_phaddr(env, (vaddr)addr);
+            env->load_is_cap = cap_mem_map_query(&cm_map, paddr, NULL);
             if(env->load_is_cap) {
-                CAPSTONE_DEBUG_INFO("Cap loaded from %lx\n", addr);
+                CAPSTONE_DEBUG_INFO("Cap loaded from %lx (paddr = %lx)\n", addr, paddr);
             }
             if(env->load_is_cap && (addr & 7)) {
                 CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
@@ -1031,7 +1032,8 @@ void helper_load_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint3
 }
 
 void helper_cap_scrub(CPURISCVState *env, uint64_t addr) {
-    cap_mem_map_remove(&cm_map, addr);
+    uint64_t paddr = (uint64_t)capstone_get_phaddr(env, (vaddr)addr);
+    cap_mem_map_remove(&cm_map, paddr);
 }
 
 void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint32_t rs2,
@@ -1058,12 +1060,14 @@ void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint
         // contains a capability
         // int cap_idx = cap_map_alloc();
         // *cap_map_get(cap_idx) = env->gpr[rs2].val.cap;
-        cap_mem_map_add(&cm_map, addr, &env->gpr[rs2].val.cap);
+        uint64_t paddr = (uint64_t)capstone_get_phaddr(env, (vaddr)addr);
+        cap_mem_map_add(&cm_map, paddr, &env->gpr[rs2].val.cap);
         env->data_to_store_with_cap = env->gpr[rs2].val.scalar;
         // fprintf(stderr, "Encap idx = %lx %d\n\n", addr, cap_idx);
     } else {
         env->data_to_store_with_cap = env->gpr[rs2].val.scalar;
-        cap_mem_map_remove(&cm_map, addr);
+        uint64_t paddr = (uint64_t)capstone_get_phaddr(env, (vaddr)addr);
+        cap_mem_map_remove(&cm_map, paddr);
     }
     if (use_cap) {
         _helper_access_with_cap(env, addr, rs1, rs2, memop, true);
@@ -1073,7 +1077,8 @@ void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint
 // check if the location has a capability, if it does, retrieve it from the cap map
 void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd) {
     capfat_t cap;
-    if (cap_mem_map_query(&cm_map, addr, &cap)) {
+    uint64_t paddr = (uint64_t)capstone_get_phaddr(env, (vaddr)addr);
+    if (cap_mem_map_query(&cm_map, paddr, &cap)) {
         env->gpr[rd].tag = true;
         env->gpr[rd].val.cap = cap;
     } else {
@@ -1110,15 +1115,17 @@ void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd) {
 /* set tag bit for address */
 void helper_set_cap_mem_map(CPURISCVState *env, uint32_t reg, uint64_t addr, uint64_t to_set) {
     capregval_t *reg_v = &env->gpr[reg];
+    uint64_t paddr = (uint64_t)capstone_get_phaddr(env, (vaddr)addr);
     if (to_set) {
-        cap_mem_map_add(&cm_map, addr, &reg_v->val.cap);
+        cap_mem_map_add(&cm_map, paddr, &reg_v->val.cap);
     } else {
-        cap_mem_map_remove(&cm_map, addr);
+        cap_mem_map_remove(&cm_map, paddr);
     }
 }
 
 void helper_remove_cap_mem_map(CPURISCVState *env, uint64_t addr, uint32_t memop) {
-    cap_mem_map_remove_range(&cm_map, addr, memop_size((MemOp)memop));
+    uint64_t paddr = (uint64_t)capstone_get_phaddr(env, (vaddr)addr);
+    cap_mem_map_remove_range(&cm_map, paddr, memop_size((MemOp)memop));
 }
 
 /* helpers for Capstone control transfer instructions */

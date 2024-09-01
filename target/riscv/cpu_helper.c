@@ -432,7 +432,7 @@ static int riscv_cpu_local_irq_pending(CPURISCVState *env)
         if(env->cis && env->cih.tag) {
             // just get any pending IRQ
             int nxt_irq;
-            for(nxt_irq = 0; (env->cis >> nxt_irq) && 
+            for(nxt_irq = 0; (env->cis >> nxt_irq) &&
                 !((env->cis >> nxt_irq) & 1);
                 ++ nxt_irq);
             assert(((env->cis) >> nxt_irq) & 1);
@@ -680,12 +680,12 @@ void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level) {
 
     env->cis = (env->cis & ~mask_cis) | (value & mask_cis);
     env->mip = (env->mip & ~mask_mip) | (value & mask_mip);
-    
+
     // FIXME: a hack to lower supervisor-external
     if(level == 0 && capstone_irq == IRQ_S_EXT) {
         env->mip &= ~(uint64_t)MIP_SEIP;
     }
-    
+
     riscv_cpu_check_interrupts(env);
 }
 
@@ -1960,4 +1960,15 @@ bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessT
         cpu_loop_exit_restore(cs, retaddr);
     }
     return access_allowed;
+}
+
+hwaddr capstone_get_phaddr(CPURISCVState *env, vaddr addr) {
+    // hwaddr r;
+    // int prot;
+    CPUState *cs = env_cpu(env);
+    return riscv_cpu_get_phys_page_debug(cs, addr & ~0xfff) | (addr & 0xfff);
+    // get_physical_address(env, &r, &prot, addr, NULL, 0, PRV_S, true, false, true);
+    // fprintf(stderr, "P %lx = %lx\n", addr, r);
+    // return r;
+    // return (hwaddr)addr;
 }
