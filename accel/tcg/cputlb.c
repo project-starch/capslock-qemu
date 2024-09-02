@@ -1946,7 +1946,7 @@ static bool mmu_lookup(CPUArchState *env, vaddr addr, MemOpIdx oi,
     CPUState *cpu = env_cpu(env);
     if(cpu->cc->tcg_ops->pre_mem_access) {
         int size = memop_size(l->memop);
-        cpu->cc->tcg_ops->pre_mem_access(cpu, l->page[0].full->phys_addr + 
+        cpu->cc->tcg_ops->pre_mem_access(cpu, l->page[0].full->phys_addr +
                 (addr & (TARGET_PAGE_SIZE - 1)), size, type, ra);
     }
 

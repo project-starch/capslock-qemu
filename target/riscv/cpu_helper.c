@@ -36,6 +36,7 @@
 #include "tcg/oversized-guest.h"
 #include "capstone_defs.h"
 #include "capstone_helper.h"
+#include "exec/cpu_ldst.h"
 
 int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch)
 {
@@ -1160,6 +1161,7 @@ static void raise_mmu_exception(CPURISCVState *env, target_ulong address,
     int page_fault_exceptions, vm;
     uint64_t stap_mode;
 
+
     if (riscv_cpu_mxl(env) == MXL_RV32) {
         stap_mode = SATP32_MODE;
     } else {
@@ -1962,13 +1964,16 @@ bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessT
     return access_allowed;
 }
 
-hwaddr capstone_get_phaddr(CPURISCVState *env, vaddr addr) {
-    // hwaddr r;
-    // int prot;
-    CPUState *cs = env_cpu(env);
-    return riscv_cpu_get_phys_page_debug(cs, addr & ~0xfff) | (addr & 0xfff);
-    // get_physical_address(env, &r, &prot, addr, NULL, 0, PRV_S, true, false, true);
-    // fprintf(stderr, "P %lx = %lx\n", addr, r);
-    // return r;
+/**
+ * Returns the corresponding host address of a virtual address.
+ * This can only be called immediately after a memory access.
+ */
+uintptr_t capstone_get_haddr(CPURISCVState *env, vaddr addr, MMUAccessType access_type) {
     // return (hwaddr)addr;
+    unsigned int mmu_idx = cpu_mmu_index(env, false);
+    CPUTLBEntry *entry = tlb_entry(env, mmu_idx, addr);
+    uint64_t tlb_addr = tlb_read_idx(entry, access_type);
+
+    assert(tlb_hit(tlb_addr, addr));
+    return (uintptr_t)addr + entry->addend;
 }

@@ -757,6 +757,6 @@ const char *satp_mode_str(uint8_t satp_mode, bool is_32_bit);
 
 
 void riscv_cpu_check_interrupts(CPURISCVState *env);
-hwaddr capstone_get_phaddr(CPURISCVState *env, vaddr addr);
+uintptr_t capstone_get_haddr(CPURISCVState *env, vaddr addr, MMUAccessType access_type);
 
 #endif /* RISCV_CPU_H */
