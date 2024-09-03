@@ -78,12 +78,11 @@ void cap_mem_map_add(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, capfat_t *c
 }
 
 void cap_mem_map_remove(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
-    if(addr_is_aligned(addr)) {
-        struct CapMemMapEntry *entry = find_entry(cm_map, addr);
-        if(entry) {
-            unsigned offset = addr_get_entry_offset(addr);
-            clear_entry_at_offset(entry, offset);
-        }
+    addr = addr_round_down(addr);
+    struct CapMemMapEntry *entry = find_entry(cm_map, addr);
+    if(entry) {
+        unsigned offset = addr_get_entry_offset(addr);
+        clear_entry_at_offset(entry, offset);
     }
 }
 

@@ -1056,7 +1056,7 @@ void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint
         //     fprintf(stderr, "Bad cap %lx\n", addr);
         // }
     // }
-    if (env->gpr[rs2].tag) {
+    if (env->gpr[rs2].tag && memop_size((MemOp)memop) == 8) {
         // contains a capability
         // int cap_idx = cap_map_alloc();
         // *cap_map_get(cap_idx) = env->gpr[rs2].val.cap;

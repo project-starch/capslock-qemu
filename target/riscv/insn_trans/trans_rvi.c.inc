@@ -18,6 +18,8 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define UNUSED __attribute__((unused))
+
 static bool trans_illegal(DisasContext *ctx, arg_empty *a)
 {
     gen_exception_illegal(ctx);
@@ -226,7 +228,7 @@ static bool trans_bgeu(DisasContext *ctx, arg_bgeu *a)
     return gen_branch(ctx, a, TCG_COND_GEU);
 }
 
-static bool gen_load_tl(DisasContext *ctx, arg_lb *a, MemOp memop)
+static UNUSED bool gen_load_tl(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
     TCGv dest = dest_gpr(ctx, a->rd);
     TCGv addr = get_address(ctx, a->rs1, a->imm);
@@ -237,7 +239,7 @@ static bool gen_load_tl(DisasContext *ctx, arg_lb *a, MemOp memop)
 }
 
 /* Compute only 64-bit addresses to use the address translation mechanism */
-static bool gen_load_i128(DisasContext *ctx, arg_lb *a, MemOp memop)
+static UNUSED bool gen_load_i128(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
     TCGv src1l = get_gpr(ctx, a->rs1, EXT_NONE);
     TCGv destl = dest_gpr(ctx, a->rd);
@@ -292,16 +294,16 @@ static bool gen_load(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
     // TODO: support capability-based addressing
     decode_save_opc(ctx);
-    if (ctx->priv == PRV_U || (memop & MO_SIZE) == MO_64) {
+    // if (ctx->priv == PRV_U || (memop & MO_SIZE) == MO_64) {
         // we need to use Capstone capabilities
-        return gen_load_tl_with_cap(ctx, a, memop);
-    } else {
-        if (get_xl(ctx) == MXL_RV128) {
-            return gen_load_i128(ctx, a, memop);
-        } else {
-            return gen_load_tl(ctx, a, memop);
-        }
-    }
+    return gen_load_tl_with_cap(ctx, a, memop);
+    // } else {
+    //     if (get_xl(ctx) == MXL_RV128) {
+    //         return gen_load_i128(ctx, a, memop);
+    //     } else {
+    //         return gen_load_tl(ctx, a, memop);
+    //     }
+    // }
 }
 
 static bool trans_lb(DisasContext *ctx, arg_lb *a)
@@ -353,7 +355,7 @@ static bool trans_ldu(DisasContext *ctx, arg_ldu *a)
     return gen_load(ctx, a, MO_TEUQ);
 }
 
-static bool gen_store_tl(DisasContext *ctx, arg_sb *a, MemOp memop)
+static UNUSED bool gen_store_tl(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
     TCGv addr = get_address(ctx, a->rs1, a->imm);
     TCGv data = get_gpr(ctx, a->rs2, EXT_NONE);
@@ -372,7 +374,7 @@ static bool gen_store_tl(DisasContext *ctx, arg_sb *a, MemOp memop)
     return true;
 }
 
-static bool gen_store_i128(DisasContext *ctx, arg_sb *a, MemOp memop)
+static UNUSED bool gen_store_i128(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
     TCGv src1l = get_gpr(ctx, a->rs1, EXT_NONE);
     TCGv src2l = get_gpr(ctx, a->rs2, EXT_NONE);
@@ -411,16 +413,16 @@ static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
 static bool gen_store(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
     decode_save_opc(ctx);
-    if (ctx->priv == PRV_U) {
+    // if (ctx->priv == PRV_U) {
         /* perform store using a capability */
         return gen_store_tl_with_cap(ctx, a, memop);
-    } else {
-        if (get_xl(ctx) == MXL_RV128) {
-            return gen_store_i128(ctx, a, memop);
-        } else {
-            return gen_store_tl(ctx, a, memop);
-        }
-    }
+    // } else {
+    //     if (get_xl(ctx) == MXL_RV128) {
+    //         return gen_store_i128(ctx, a, memop);
+    //     } else {
+    //         return gen_store_tl(ctx, a, memop);
+    //     }
+    // }
 }
 
 static bool trans_sb(DisasContext *ctx, arg_sb *a)
