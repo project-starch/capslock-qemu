@@ -21,13 +21,16 @@
 static bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
 {
     TCGv src1;
-
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    TCGv_i32 memop_v = tcg_constant_i32((int)mop);
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
     decode_save_opc(ctx);
     src1 = get_address(ctx, a->rs1, 0);
     if (a->rl) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_STRL);
     }
     tcg_gen_qemu_ld_tl(load_val, src1, ctx->mem_idx, mop);
+    gen_helper_load_with_cap(cpu_env, src1, rs1, memop_v);
     if (a->aq) {
         tcg_gen_mb(TCG_MO_ALL | TCG_BAR_LDAQ);
     }
@@ -35,6 +38,7 @@ static bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
     /* Put addr in load_res, data in load_val.  */
     tcg_gen_mov_tl(load_res, src1);
     gen_set_gpr(ctx, a->rd, load_val);
+    gen_helper_check_cap_load(cpu_env, src1, rd);
 
     return true;
 }
@@ -44,6 +48,9 @@ static bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
     TCGv dest, src1, src2;
     TCGLabel *l1 = gen_new_label();
     TCGLabel *l2 = gen_new_label();
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
+    TCGv_i32 memop_v = tcg_constant_i32((int)mop);
 
     decode_save_opc(ctx);
     src1 = get_address(ctx, a->rs1, 0);
@@ -58,6 +65,7 @@ static bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
     tcg_gen_atomic_cmpxchg_tl(dest, load_res, load_val, src2,
                               ctx->mem_idx, mop);
     tcg_gen_setcond_tl(TCG_COND_NE, dest, dest, load_val);
+    gen_helper_store_with_cap(cpu_env, src1, rs1, rs2, memop_v, tcg_constant_i32(1));
     gen_set_gpr(ctx, a->rd, dest);
     tcg_gen_br(l2);
 

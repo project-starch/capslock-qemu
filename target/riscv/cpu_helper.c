@@ -1969,11 +1969,14 @@ bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessT
  * This can only be called immediately after a memory access.
  */
 uintptr_t capstone_get_haddr(CPURISCVState *env, vaddr addr, MMUAccessType access_type) {
-    // return (hwaddr)addr;
+#ifdef CAPSTONE_USE_VADDR
+    return (hwaddr)addr;
+#else
     unsigned int mmu_idx = cpu_mmu_index(env, false);
     CPUTLBEntry *entry = tlb_entry(env, mmu_idx, addr);
     uint64_t tlb_addr = tlb_read_idx(entry, access_type);
 
     assert(tlb_hit(tlb_addr, addr));
     return (uintptr_t)addr + entry->addend;
+#endif
 }

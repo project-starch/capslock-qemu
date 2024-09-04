@@ -839,7 +839,7 @@ void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t pe
 }
 
 void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
-    CAPSTONE_DEBUG_PRINT("Dropping capability in %u\n", rs1);
+    // CAPSTONE_DEBUG_PRINT("Dropping capability in %u\n", rs1);
     capregval_t *rs1_v = &env->gpr[rs1];
 
     if (rs1_v->tag) {
@@ -1016,7 +1016,7 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
             uint64_t paddr = (uint64_t)capstone_get_haddr(env, (vaddr)addr, MMU_DATA_LOAD);
             env->load_is_cap = cap_mem_map_query(&cm_map, paddr, NULL);
             if(env->load_is_cap) {
-                CAPSTONE_DEBUG_INFO("Cap loaded from %lx (paddr = %lx)\n", addr, paddr);
+                CAPSTONE_DEBUG_INFO("Cap loaded from %lx (paddr = %lx, pc = %lx)\n", addr, paddr, env->pc);
             }
             if(env->load_is_cap && (addr & 7)) {
                 CAPSTONE_DEBUG_PRINT("Unaligned cap access (addr = 0x%lx)\n", addr);
@@ -1322,7 +1322,7 @@ void helper_cscapenter(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
 
 void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
     // CAPSTONE_DEBUG_PRINT("Generating cap with (0x%lx, 0x%lx)\n", rs1_v, rs2_v);
-    fprintf(stderr, "G %lx %lx\n", rs1_v, rs2_v);
+    // fprintf(stderr, "G %lx %lx\n", rs1_v, rs2_v);
     capregval_t *rd_v = &env->gpr[rd];
     capfat_t *cap = &rd_v->val.cap;
     cap->bounds.base = rs1_v;
