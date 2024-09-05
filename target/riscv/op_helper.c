@@ -1062,6 +1062,11 @@ void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint
         // *cap_map_get(cap_idx) = env->gpr[rs2].val.cap;
         uint64_t paddr = (uint64_t)capstone_get_haddr(env, (vaddr)addr, MMU_DATA_STORE);
         cap_mem_map_add(&cm_map, paddr, &env->gpr[rs2].val.cap);
+        // CPUState *cs = env_cpu(env);
+        // MemTxResult res;
+        // uint64_t r =  address_space_ldq(cs->as, paddr, MEMTXATTRS_UNSPECIFIED, &res);
+        // assert(res == MEMTX_OK);
+        // assert(r == env->gpr[rs2].val.cap.bounds.cursor);
         env->data_to_store_with_cap = env->gpr[rs2].val.scalar;
         // fprintf(stderr, "Encap idx = %lx %d\n\n", addr, cap_idx);
     } else {
@@ -1075,12 +1080,23 @@ void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint
 }
 
 // check if the location has a capability, if it does, retrieve it from the cap map
-void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd) {
+void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd, uint32_t memop) {
+    if (memop_size((MemOp)memop) != 8) {
+        env->gpr[rd].tag = false;
+        return;
+    }
     capfat_t cap;
     uint64_t paddr = (uint64_t)capstone_get_haddr(env, (vaddr)addr, MMU_DATA_LOAD);
     if (cap_mem_map_query(&cm_map, paddr, &cap)) {
-        env->gpr[rd].tag = true;
-        env->gpr[rd].val.cap = cap;
+        if (cap.bounds.cursor != env->gpr[rd].val.scalar) {
+            // FIXME: a hack; is this device address?
+            cap_mem_map_remove(&cm_map, paddr);
+            // fprintf(stderr, "Bad load %lx != %lx @ %lx (%lx)\n", cap.bounds.cursor, env->gpr[rd].val.scalar, addr, paddr);
+            // assert(false);
+        } else {
+            env->gpr[rd].tag = true;
+            env->gpr[rd].val.cap = cap;
+        }
     } else {
         env->gpr[rd].tag = false;
     }
@@ -1360,8 +1376,10 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     }
 }
 
-void helper_capstone_debugger(void) {
-    CAPSTONE_DEBUG_PRINT("DEBUGGER\n");
+void helper_capstone_debugger(CPURISCVState *env, uint64_t v) {
+    if ((v & 0xffffffff) == 0x4ee0c) {
+        fprintf(stderr, "Bad\n");
+    }
 }
 
 void helper_csdebugcount(CPURISCVState *env, uint64_t rs1_v, uint64_t rs2_v) {

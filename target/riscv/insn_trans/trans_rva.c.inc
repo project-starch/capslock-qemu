@@ -38,7 +38,7 @@ static bool gen_lr(DisasContext *ctx, arg_atomic *a, MemOp mop)
     /* Put addr in load_res, data in load_val.  */
     tcg_gen_mov_tl(load_res, src1);
     gen_set_gpr(ctx, a->rd, load_val);
-    gen_helper_check_cap_load(cpu_env, src1, rd);
+    gen_helper_check_cap_load(cpu_env, src1, rd, tcg_constant_i32((int)mop));
 
     return true;
 }
@@ -48,6 +48,7 @@ static bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
     TCGv dest, src1, src2;
     TCGLabel *l1 = gen_new_label();
     TCGLabel *l2 = gen_new_label();
+    TCGLabel *l3 = gen_new_label();
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
     TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
     TCGv_i32 memop_v = tcg_constant_i32((int)mop);
@@ -60,12 +61,17 @@ static bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
      * Note that the TCG atomic primitives are SC,
      * so we can ignore AQ/RL along this path.
      */
-    dest = dest_gpr(ctx, a->rd);
+    dest = tcg_temp_new();
+    // dest = dest_gpr(ctx, a->rd);
     src2 = get_gpr(ctx, a->rs2, EXT_NONE);
+    // gen_helper_capstone_debugger(cpu_env, src2);
+
     tcg_gen_atomic_cmpxchg_tl(dest, load_res, load_val, src2,
                               ctx->mem_idx, mop);
     tcg_gen_setcond_tl(TCG_COND_NE, dest, dest, load_val);
+    tcg_gen_brcond_tl(TCG_COND_NE, dest, tcg_constant_i64(0), l3); // skips cap store
     gen_helper_store_with_cap(cpu_env, src1, rs1, rs2, memop_v, tcg_constant_i32(1));
+    gen_set_label(l3);
     gen_set_gpr(ctx, a->rd, dest);
     tcg_gen_br(l2);
 

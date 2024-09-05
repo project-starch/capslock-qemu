@@ -272,7 +272,7 @@ static bool gen_load_tl_with_cap(DisasContext *ctx, arg_lb *a, MemOp memop)
     // can improve the performance later
     TCGv addr = get_address(ctx, a->rs1, a->imm);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-    TCGv dest = dest_gpr(ctx, a->rd);
+    TCGv dest = tcg_temp_new();
     TCGv_i32 memop_v = tcg_constant_i32((int)memop);
     TCGv_i32 rd = tcg_constant_i32(a->rd);
 
@@ -282,9 +282,9 @@ static bool gen_load_tl_with_cap(DisasContext *ctx, arg_lb *a, MemOp memop)
     gen_set_gpr(ctx, a->rd, dest);
 
     // check if this is a capbaility
-    if (memop == MO_TESQ) {
-        gen_helper_check_cap_load(cpu_env, addr, rd);
-    }
+    // if (memop == MO_TESQ) {
+    gen_helper_check_cap_load(cpu_env, addr, rd, tcg_constant_i32((int)memop));
+    // }
     // gen_helper_capstone_debugger(); // just to signal the end of the execution
 
     return true;

@@ -64,6 +64,7 @@ static bool trans_fsd(DisasContext *ctx, arg_fsd *a)
     decode_save_opc(ctx);
     addr = get_address(ctx, a->rs1, a->imm);
     tcg_gen_qemu_st_i64(cpu_fpr[a->rs2], addr, ctx->mem_idx, MO_TEUQ);
+    gen_helper_cap_scrub(cpu_env, addr);
     return true;
 }
 

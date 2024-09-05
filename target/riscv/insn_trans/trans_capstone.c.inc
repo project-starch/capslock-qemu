@@ -278,7 +278,7 @@ static bool trans_csdebugprint(DisasContext *ctx, arg_csdebugprint *a) {
 }
 
 static bool trans_csdebugbreak(DisasContext *ctx, arg_csdebugbreak *a) {
-    gen_helper_capstone_debugger();
+    gen_helper_capstone_debugger(cpu_env, tcg_constant_tl(0));
     return true;
 }
 
