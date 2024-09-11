@@ -25,6 +25,7 @@ struct CapRevTree {
     struct CapRevNode node_pool[CAP_REV_TREE_SIZE];
     uint32_t alloced_n;
     cap_rev_node_id_t free_list;
+    capregval_t *gprs;
 };
 
 typedef struct CapRevTree cap_rev_tree_t;
@@ -79,10 +80,10 @@ inline static void cap_rev_tree_delin(cap_rev_tree_t *tree, cap_rev_node_id_t no
 }
 
 inline static void reg_overwrite(cap_rev_tree_t *tree, capregval_t *v) {
-    if (v->tag) {
+    // if (v->tag) {
         // fprintf(stderr, "O %u\n", v->val.cap.rev_node_id);
-        cap_rev_tree_update_refcount(tree, v->val.cap.rev_node_id, -1);
-    }
+        // cap_rev_tree_update_refcount(tree, v->val.cap.rev_node_id, -1);
+    // }
 }
 
 #endif

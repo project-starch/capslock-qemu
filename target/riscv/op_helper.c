@@ -781,7 +781,7 @@ void helper_csshrinkto(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t s
             rs1_v->val.cap.bounds.cursor + size <= rs1_v->val.cap.bounds.end);
 
     reg_overwrite(&env->cr_tree, rd_v);
-    cap_rev_tree_update_refcount(&env->cr_tree, rs1_v->val.cap.rev_node_id, 1);
+    // cap_rev_tree_update_refcount(&env->cr_tree, rs1_v->val.cap.rev_node_id, 1);
     *rd_v = *rs1_v;
     rd_v->val.cap.bounds.base = rd_v->val.cap.bounds.cursor;
     rd_v->val.cap.bounds.end = rd_v->val.cap.bounds.cursor + size;
@@ -830,7 +830,7 @@ void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t pe
 
     if(rs1 != rd) {
         reg_overwrite(&env->cr_tree, rd_v);
-        cap_rev_tree_update_refcount(&env->cr_tree, rs1_v->val.cap.rev_node_id, 1);
+        // cap_rev_tree_update_refcount(&env->cr_tree, rs1_v->val.cap.rev_node_id, 1);
         *rd_v = *rs1_v;
         if(!captype_is_copyable(rs1_v->val.cap.type)) {
             *rs1_v = CAPREGVAL_NULL;
@@ -1108,7 +1108,7 @@ void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd, uint3
         } else {
             env->gpr[rd].tag = true;
             env->gpr[rd].val.cap = cap;
-            cap_rev_tree_update_refcount(&env->cr_tree, cap.rev_node_id, 1);
+            // cap_rev_tree_update_refcount(&env->cr_tree, cap.rev_node_id, 1);
         }
     } else {
         env->gpr[rd].tag = false;
@@ -1417,7 +1417,7 @@ void helper_move_cap(CPURISCVState *env, uint64_t v, uint32_t rd_v, uint32_t rs1
     env->gpr[rd_v].val.scalar = v;
     env->gpr[rd_v].tag = true;
     // fprintf(stderr, "M %u -> %u\n", rs1_v, rd_v);
-    cap_rev_tree_update_refcount(&env->cr_tree, env->gpr[rs1_v].val.cap.rev_node_id, 1);
+    // cap_rev_tree_update_refcount(&env->cr_tree, env->gpr[rs1_v].val.cap.rev_node_id, 1);
 }
 
 void helper_reg_overwrite(CPURISCVState *env, uint32_t reg_num) {

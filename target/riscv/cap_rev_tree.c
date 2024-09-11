@@ -7,10 +7,20 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
         while (cur != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE_REUSABLE(tree, cur) && !_CAP_REV_NODE(tree, cur).is_free) {
             cap_rev_node_id_t nxt = _CAP_REV_NODE(tree, cur).next;
             cap_rev_node_id_t prev = _CAP_REV_NODE(tree, cur).prev;
+            bool in_reg = false;
+            int i;
             if(nxt != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, nxt).depth > _CAP_REV_NODE(tree, cur).depth &&
                 prev != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, prev).depth >= _CAP_REV_NODE(tree, cur).depth) {
                 break;
             }
+            for (i = 1; i < 32; i ++) {
+                if (tree->gprs[i].tag && tree->gprs[i].val.cap.rev_node_id == n) {
+                    in_reg = true;
+                    break;
+                }
+            }
+            if(in_reg)
+                break;
             // move this node to free list
             cap_rev_tree_release(tree, cur);
             cur = prev;
@@ -47,7 +57,7 @@ static cap_rev_node_id_t _cap_rev_tree_dup_node_after(cap_rev_tree_t *tree, cap_
     _CAP_REV_NODE(tree, new_node).valid = _CAP_REV_NODE(tree, node_id).valid;
     _CAP_REV_NODE(tree, new_node).linear = true;
     _CAP_REV_NODE(tree, new_node).mutable = _CAP_REV_NODE(tree, node_id).mutable;
-    _CAP_REV_NODE(tree, new_node).refcount = 1;
+    _CAP_REV_NODE(tree, new_node).refcount = 0;
 
     cap_rev_node_id_t next = _CAP_REV_NODE(tree, node_id).next;
     _CAP_REV_NODE(tree, new_node).next = next;
@@ -70,7 +80,7 @@ static cap_rev_node_id_t _cap_rev_tree_dup_node_after(cap_rev_tree_t *tree, cap_
 //     _CAP_REV_NODE(tree, new_node).depth = _CAP_REV_NODE(tree, node_id).depth;
 //     _CAP_REV_NODE(tree, new_node).valid = true;
 //     _CAP_REV_NODE(tree, new_node).linear = true;
-//     _CAP_REV_NODE(tree, new_node).refcount = 1;
+//     _CAP_REV_NODE(tree, new_node).refcount = 0;
 
 //     cap_rev_node_id_t prev = _CAP_REV_NODE(tree, node_id).prev;
 //     _CAP_REV_NODE(tree, new_node).prev = prev;
@@ -86,7 +96,7 @@ static cap_rev_node_id_t _cap_rev_tree_dup_node_after(cap_rev_tree_t *tree, cap_
 cap_rev_node_id_t cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable) {
     cap_rev_node_id_t node = _cap_rev_tree_alloc_node(tree);
     _CAP_REV_NODE(tree, node).depth = 0;
-    _CAP_REV_NODE(tree, node).refcount = 1;
+    _CAP_REV_NODE(tree, node).refcount = 0;
     _CAP_REV_NODE(tree, node).prev = CAP_REV_NODE_ID_NULL;
     _CAP_REV_NODE(tree, node).next = CAP_REV_NODE_ID_NULL;
     _CAP_REV_NODE(tree, node).mutable = mutable;
