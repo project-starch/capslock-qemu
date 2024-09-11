@@ -1,14 +1,38 @@
 #include "cap_rev_tree.h"
 
+static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
+    int n;
+    for(n = 0; n < CAP_REV_TREE_SIZE; n ++) {
+        cap_rev_node_id_t cur = (cap_rev_node_id_t)n;
+        while (cur != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE_REUSABLE(tree, cur) && !_CAP_REV_NODE(tree, cur).is_free) {
+            cap_rev_node_id_t nxt = _CAP_REV_NODE(tree, cur).next;
+            cap_rev_node_id_t prev = _CAP_REV_NODE(tree, cur).prev;
+            if(nxt != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, nxt).depth > _CAP_REV_NODE(tree, cur).depth &&
+                prev != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, prev).depth >= _CAP_REV_NODE(tree, cur).depth) {
+                break;
+            }
+            // move this node to free list
+            cap_rev_tree_release(tree, cur);
+            cur = prev;
+        }
+    }
+}
+
 static cap_rev_node_id_t _cap_rev_tree_alloc_node(cap_rev_tree_t *tree) {
     if(tree->alloced_n < CAP_REV_TREE_SIZE) {
         return tree->alloced_n ++;
     }
+    // free list is empty, now try recycling some nodes
+    if(tree->free_list == CAP_REV_NODE_ID_NULL) {
+        _cap_rev_tree_gc(tree);
+    }
     if(tree->free_list != CAP_REV_NODE_ID_NULL) {
         cap_rev_node_id_t res = tree->free_list;
         tree->free_list = _CAP_REV_NODE(tree, res).next;
+        _CAP_REV_NODE(tree, res).is_free = false;
         return res;
     }
+
     return CAP_REV_NODE_ID_NULL;
 }
 
@@ -131,6 +155,15 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool m
 
 void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
     assert(_CAP_REV_NODE_REUSABLE(tree, node_id));
+    cap_rev_node_id_t nxt = _CAP_REV_NODE(tree, node_id).next;
+    cap_rev_node_id_t prev = _CAP_REV_NODE(tree, node_id).prev;
+    if (prev != CAP_REV_NODE_ID_NULL) {
+        _CAP_REV_NODE(tree, prev).next = nxt;
+    }
+    if (nxt != CAP_REV_NODE_ID_NULL) {
+        _CAP_REV_NODE(tree, nxt).prev = prev;
+    }
     _CAP_REV_NODE(tree, node_id).next = tree->free_list;
     tree->free_list = node_id;
+    _CAP_REV_NODE(tree, node_id).is_free = true;
 }

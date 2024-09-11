@@ -2,16 +2,19 @@
 #define _CAP_REV_TREE_H_
 
 #include "cap.h"
+#include <stdio.h>
 
-#define CAP_REV_TREE_SIZE 1024
+#define CAP_REV_TREE_SIZE 65536
 #define _CAP_REV_NODE(tree, node_id) ((tree)->node_pool[node_id])
-#define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0 && !_CAP_REV_NODE(tree, node_id).valid)
+// #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0 && !_CAP_REV_NODE(tree, node_id).valid)
+#define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0)
 
 static const cap_rev_node_id_t CAP_REV_NODE_ID_NULL = -1;
 
 struct CapRevNode {
     cap_rev_node_id_t prev, next;
     uint32_t depth;
+    bool is_free;
     bool mutable;
     bool valid;
     bool linear; /* does invalidating this node necessitate hiding the data */
@@ -60,16 +63,26 @@ inline static void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_id
 }
 
 inline static void cap_rev_tree_update_refcount(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, int32_t delta) {
-    assert(node_id < tree->alloced_n);
+    // fprintf(stderr, "R %u %d\n", node_id, delta);
+    assert(node_id < tree->alloced_n && !_CAP_REV_NODE(tree, node_id).is_free);
+    assert((~_CAP_REV_NODE(tree, node_id).refcount) > _CAP_REV_NODE(tree, node_id).refcount);
+    // assert(_CAP_REV_NODE(tree, node_id).refcount != 0);
     _CAP_REV_NODE(tree, node_id).refcount += delta;
-    if(_CAP_REV_NODE_REUSABLE(tree, node_id)) {
-        cap_rev_tree_release(tree, node_id);
-    }
+    // if(_CAP_REV_NODE_REUSABLE(tree, node_id)) {
+    //     cap_rev_tree_release(tree, node_id);
+    // }
 }
 
 inline static void cap_rev_tree_delin(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
     assert(node_id < tree->alloced_n);
     _CAP_REV_NODE(tree, node_id).linear = false;
+}
+
+inline static void reg_overwrite(cap_rev_tree_t *tree, capregval_t *v) {
+    if (v->tag) {
+        // fprintf(stderr, "O %u\n", v->val.cap.rev_node_id);
+        cap_rev_tree_update_refcount(tree, v->val.cap.rev_node_id, -1);
+    }
 }
 
 #endif

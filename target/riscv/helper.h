@@ -1228,3 +1228,5 @@ DEF_HELPER_2(csdebugprint, void, env, i32)
 DEF_HELPER_2(capstone_debugger, void, env, tl)
 DEF_HELPER_3(csdebugcount, void, env, tl, tl)
 DEF_HELPER_1(csdebugcountprint, void, env)
+
+DEF_HELPER_2(reg_overwrite, void, env, i32)

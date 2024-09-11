@@ -391,17 +391,28 @@ static TCGv dest_gprh(DisasContext *ctx, int reg_num)
     return cpu_gprh[reg_num];
 }
 
+static void gen_reg_overwrite(DisasContext *ctx, int reg_num) {
+    assert(reg_num != 0);
+    TCGv_i32 tag = cpu_gpr_tag[reg_num];
+    TCGLabel *skip_l;
+
+    skip_l = gen_new_label();
+
+    tcg_gen_brcondi_i32(TCG_COND_EQ, tag, 0, skip_l);
+    gen_helper_reg_overwrite(cpu_env, tcg_constant_i32(reg_num));
+    gen_set_label(skip_l);
+}
+
 static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs, TCGv_i32 tag)
 {
     TCGLabel *l, *fin;
+    TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
     if (reg_num != 0) {
-        TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
-        if (tag)
-            tcg_gen_mov_i32(dest_tag, tag);
-        else
-            tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
+        // FIXME: incorrect
         switch (get_ol(ctx)) {
         case MXL_RV32:
+            gen_reg_overwrite(ctx, reg_num);
+            tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
             tcg_gen_ext32s_tl(cpu_gpr[reg_num], t);
             break;
         case MXL_RV64:
@@ -411,6 +422,8 @@ static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs, T
                 fin = gen_new_label();
 
                 tcg_gen_brcondi_i32(TCG_COND_NE, tag, 0x0, l);
+                gen_reg_overwrite(ctx, reg_num);
+                tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
                 tcg_gen_mov_tl(cpu_gpr[reg_num], t);
                 tcg_gen_br(fin);
 
@@ -418,7 +431,10 @@ static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs, T
                 gen_helper_move_cap(cpu_env, t, tcg_constant_i32(reg_num), tcg_constant_i32(rs));
                 gen_set_label(fin);
             } else {
+                gen_reg_overwrite(ctx, reg_num);
+                tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
                 tcg_gen_mov_tl(cpu_gpr[reg_num], t);
+                // tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
             }
 
             break;
@@ -441,6 +457,9 @@ static void gen_set_gpr(DisasContext *ctx, int reg_num, TCGv t)
 static void gen_set_gpri(DisasContext *ctx, int reg_num, target_long imm)
 {
     if (reg_num != 0) {
+        TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
+        gen_reg_overwrite(ctx, reg_num);
+        tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
         switch (get_ol(ctx)) {
         case MXL_RV32:
             tcg_gen_movi_tl(cpu_gpr[reg_num], (int32_t)imm);
@@ -456,9 +475,6 @@ static void gen_set_gpri(DisasContext *ctx, int reg_num, target_long imm)
         if (get_xl_max(ctx) == MXL_RV128) {
             tcg_gen_movi_tl(cpu_gprh[reg_num], -(imm < 0));
         }
-
-        TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
-        tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
     }
 }
 

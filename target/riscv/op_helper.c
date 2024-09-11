@@ -714,6 +714,7 @@ void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
     cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, false);
 
+    reg_overwrite(&env->cr_tree, rd_v);
     if(rs1 != rd) {
         *rd_v = *rs1_v;
     }
@@ -735,6 +736,7 @@ void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
     cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, true);
 
+    reg_overwrite(&env->cr_tree, rd_v);
     if(rs1 != rd) {
         *rd_v = *rs1_v;
     }
@@ -778,6 +780,8 @@ void helper_csshrinkto(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t s
     assert(rs1_v->val.cap.bounds.cursor >= rs1_v->val.cap.bounds.base &&
             rs1_v->val.cap.bounds.cursor + size <= rs1_v->val.cap.bounds.end);
 
+    reg_overwrite(&env->cr_tree, rd_v);
+    cap_rev_tree_update_refcount(&env->cr_tree, rs1_v->val.cap.rev_node_id, 1);
     *rd_v = *rs1_v;
     rd_v->val.cap.bounds.base = rd_v->val.cap.bounds.cursor;
     rd_v->val.cap.bounds.end = rd_v->val.cap.bounds.cursor + size;
@@ -799,7 +803,9 @@ void helper_cssplit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2)
     cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, mutable);
 
     if(rs1 != rd) {
+        reg_overwrite(&env->cr_tree, rd_v);
         *rd_v = *rs1_v;
+        // FIXME: may need to update refcount properly
 
         rs1_v->val.cap.bounds.end = mid;
         rs1_v->val.cap.bounds.cursor = rs1_v->val.cap.bounds.base;
@@ -823,6 +829,8 @@ void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t pe
     assert(cap_perms_allow(rs1_v->val.cap.perms, perms_p));
 
     if(rs1 != rd) {
+        reg_overwrite(&env->cr_tree, rd_v);
+        cap_rev_tree_update_refcount(&env->cr_tree, rs1_v->val.cap.rev_node_id, 1);
         *rd_v = *rs1_v;
         if(!captype_is_copyable(rs1_v->val.cap.type)) {
             *rs1_v = CAPREGVAL_NULL;
@@ -860,6 +868,7 @@ void helper_csinit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) 
     capaddr_t offset = rs2_v->val.scalar;
 
     if(rs1 != rd) {
+        reg_overwrite(&env->cr_tree, rd_v);
         *rd_v = *rs1_v;
         if(!captype_is_copyable(rs1_v->val.cap.type)) {
             *rs1_v = CAPREGVAL_NULL;
@@ -894,6 +903,7 @@ void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
         CAPSTONE_DEBUG_PRINT("Sealing requires an aligned region of sufficient size\n");
     }
 
+    reg_overwrite(&env->cr_tree, rd_v);
     *rd_v = *rs1_v;
     rd_v->val.cap.type = CAP_TYPE_SEALED;
     rd_v->val.cap.async = CAP_ASYNC_SYNC;
@@ -942,6 +952,7 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
     if(!captype_is_copyable(rs1_v->val.cap.type)) {
         *rs1_v = CAPREGVAL_NULL;
     }
+    reg_overwrite(&env->cr_tree, rd_v);
     *rd_v = tmp;
 
     if(needs_tlb_flush) {
@@ -973,7 +984,7 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
     if(rs1_v->tag) {
         capfat_t *cap = &rs1_v->val.cap;
 
-        CAPSTONE_DEBUG_INFO("Memacc (%s) with cap at %lx %lu\n", is_store ? "store" : "load", addr, (capaddr_t)size);
+        // fprintf(stderr, "Memacc (%s) with cap %u\n", is_store ? "store" : "load", cap->rev_node_id);
         // CAPSTONE_DEBUG_PRINT("Cap mem access addr = %lx, size = %lu\n", addr, (capaddr_t)size);
         // TODO: bounds check only for now
         if(!cap_in_bounds(&cap->bounds, addr, (capaddr_t)size)) {
@@ -1081,6 +1092,7 @@ void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint
 
 // check if the location has a capability, if it does, retrieve it from the cap map
 void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd, uint32_t memop) {
+    reg_overwrite(&env->cr_tree, &env->gpr[rd]);
     if (memop_size((MemOp)memop) != 8) {
         env->gpr[rd].tag = false;
         return;
@@ -1096,6 +1108,7 @@ void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd, uint3
         } else {
             env->gpr[rd].tag = true;
             env->gpr[rd].val.cap = cap;
+            cap_rev_tree_update_refcount(&env->cr_tree, cap.rev_node_id, 1);
         }
     } else {
         env->gpr[rd].tag = false;
@@ -1340,6 +1353,7 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
     // CAPSTONE_DEBUG_PRINT("Generating cap with (0x%lx, 0x%lx)\n", rs1_v, rs2_v);
     // fprintf(stderr, "G %lx %lx\n", rs1_v, rs2_v);
     capregval_t *rd_v = &env->gpr[rd];
+    reg_overwrite(&env->cr_tree, rd_v);
     capfat_t *cap = &rd_v->val.cap;
     cap->bounds.base = rs1_v;
     cap->bounds.end = rs2_v;
@@ -1363,14 +1377,15 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
     if(rs1_v->tag) {
         // only printing the bounds for now
-        CAPSTONE_DEBUG_PRINT("Print %u = Cap(%d, %d, 0x%x, 0x%lx, 0x%lx, 0x%lx)\n",
+        CAPSTONE_DEBUG_PRINT("Print %u = Cap(%d, %d, 0x%x, 0x%lx, 0x%lx, 0x%lx, %u)\n",
                             rs1,
                             cap_rev_tree_check_valid(&env->cr_tree, rs1_v->val.cap.rev_node_id),
                             rs1_v->val.cap.type,
                             rs1_v->val.cap.perms,
                             rs1_v->val.cap.bounds.cursor,
                             rs1_v->val.cap.bounds.base,
-                            rs1_v->val.cap.bounds.end);
+                            rs1_v->val.cap.bounds.end,
+                            rs1_v->val.cap.rev_node_id);
     } else {
         CAPSTONE_DEBUG_PRINT("Print %u = Scalar(0x%lx)\n", rs1, rs1_v->val.scalar);
     }
@@ -1397,6 +1412,15 @@ void helper_csdebugcountprint(CPURISCVState *env) {
 
 void helper_move_cap(CPURISCVState *env, uint64_t v, uint32_t rd_v, uint32_t rs1_v) {
     CAPSTONE_DEBUG_INFO("Cap moved from %u to %u\n", rs1_v, rd_v);
+    reg_overwrite(&env->cr_tree, &env->gpr[rd_v]);
     env->gpr[rd_v].val = env->gpr[rs1_v].val;
     env->gpr[rd_v].val.scalar = v;
+    env->gpr[rd_v].tag = true;
+    // fprintf(stderr, "M %u -> %u\n", rs1_v, rd_v);
+    cap_rev_tree_update_refcount(&env->cr_tree, env->gpr[rs1_v].val.cap.rev_node_id, 1);
+}
+
+void helper_reg_overwrite(CPURISCVState *env, uint32_t reg_num) {
+    // fprintf(stderr, "O [%u]\n", reg_num);
+    reg_overwrite(&env->cr_tree, &env->gpr[reg_num]);
 }

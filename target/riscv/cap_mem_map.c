@@ -1,6 +1,8 @@
 #include <string.h>
 #include <assert.h>
 #include "cap_mem_map.h"
+#include "cap_rev_tree.h"
+#include <stdio.h>
 
 #define MEM_CAP_SIZE 8 // size of a capability in memory in bytes
 #define MEM_CAP_SIZE_LOG 3
@@ -23,18 +25,24 @@ static inline unsigned addr_get_entry_offset(cap_mem_map_addr_t addr) {
     return (unsigned)((addr & 4095) >> MEM_CAP_SIZE_LOG);
 }
 
-static inline void set_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset, capfat_t *cap) {
+static inline void clear_entry_at_offset(cap_mem_map_t *cm_map, struct CapMemMapEntry *entry, unsigned offset) {
+    unsigned idx = offset >> 6;
+    unsigned bidx = offset & 63;
+    if ((entry->map[idx] >> bidx) & 1) {
+        // fprintf(stderr, "C %u\n", entry->caps[offset].rev_node_id);
+        cap_rev_tree_update_refcount(cm_map->rev_tree, entry->caps[offset].rev_node_id, -1);
+    }
+    entry->map[idx] &= ~((uint64_t)1 << bidx);
+}
+
+static inline void set_entry_at_offset(cap_mem_map_t *cm_map, struct CapMemMapEntry *entry, unsigned offset, capfat_t *cap) {
     assert(offset < 4096 / MEM_CAP_SIZE);
     unsigned idx = offset >> 6;
     unsigned bidx = offset & 63;
+    clear_entry_at_offset(cm_map, entry, offset);
     entry->map[idx] |= (uint64_t)1 << bidx;
     memcpy(&entry->caps[offset], cap, sizeof(capfat_t));
-}
-
-static inline void clear_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset) {
-    unsigned idx = offset >> 6;
-    unsigned bidx = offset & 63;
-    entry->map[idx] &= ~((uint64_t)1 << bidx);
+    cap_rev_tree_update_refcount(cm_map->rev_tree, cap->rev_node_id, 1);
 }
 
 static inline bool get_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset, capfat_t *cap_out) {
@@ -73,7 +81,7 @@ void cap_mem_map_add(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, capfat_t *c
             entry = add_entry(cm_map, addr);
         }
         unsigned offset = addr_get_entry_offset(addr);
-        set_entry_at_offset(entry, offset, cap);
+        set_entry_at_offset(cm_map, entry, offset, cap);
     }
 }
 
@@ -82,7 +90,7 @@ void cap_mem_map_remove(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
     struct CapMemMapEntry *entry = find_entry(cm_map, addr);
     if(entry) {
         unsigned offset = addr_get_entry_offset(addr);
-        clear_entry_at_offset(entry, offset);
+        clear_entry_at_offset(cm_map, entry, offset);
     }
 }
 
@@ -112,6 +120,7 @@ void cap_mem_map_clear(cap_mem_map_t *cm_map) {
     cm_map->n = 0;
 }
 
-void cap_mem_map_init(cap_mem_map_t *cm_map) {
+void cap_mem_map_init(cap_mem_map_t *cm_map, cap_rev_tree_t *rev_tree) {
     cm_map->n = 0;
+    cm_map->rev_tree = rev_tree;
 }
