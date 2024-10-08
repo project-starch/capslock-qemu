@@ -847,12 +847,18 @@ void helper_cstighten(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t pe
 }
 
 void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
-    // CAPSTONE_DEBUG_PRINT("Dropping capability in %u\n", rs1);
+    CAPSTONE_DEBUG_INFO("Dropping capability in %u\n", rs1);
     capregval_t *rs1_v = &env->gpr[rs1];
 
+    // check if the the capability is itself valid
     if (rs1_v->tag) {
-        cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, true);
-        cap_rev_tree_invalidate(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+        if (cap_rev_tree_check_valid(&env->cr_tree, rs1_v->val.cap.rev_node_id)) {
+            cap_rev_tree_revoke(&env->cr_tree, rs1_v->val.cap.rev_node_id, true);
+            cap_rev_tree_invalidate(&env->cr_tree, rs1_v->val.cap.rev_node_id);
+        } else {
+            CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability!\n");
+            riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
+        }
     }
 }
 
