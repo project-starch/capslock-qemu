@@ -26,6 +26,9 @@
 #include "target/riscv/cpu.h"
 #include "hw/qdev-properties.h"
 #include "hw/riscv/riscv_hart.h"
+#include "target/riscv/cap_mem_map.h"
+#include "target/riscv/cap_rev_tree.h"
+#include <pthread.h>
 
 static Property riscv_harts_props[] = {
     DEFINE_PROP_UINT32("num-harts", RISCVHartArrayState, num_harts, 1),
@@ -64,6 +67,16 @@ static void riscv_harts_realize(DeviceState *dev, Error **errp)
             return;
         }
     }
+
+    assert(s->num_harts <= 2);
+    for (n = 0; n < s->num_harts; n++) {
+        cr_tree.gprs[n] = s->harts[n].env.gpr;
+    }
+    cr_tree.free_list = CAP_REV_NODE_ID_NULL;
+    cap_mem_map_init(&cm_map, &cr_tree);
+
+    pthread_mutex_init(&cr_tree_lock, NULL);
+    pthread_mutex_init(&cm_map_lock, NULL);
 }
 
 static void riscv_harts_class_init(ObjectClass *klass, void *data)

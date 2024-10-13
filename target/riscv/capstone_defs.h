@@ -1,7 +1,7 @@
 #ifndef _CAPSTONE_DEFS_H_
 #define _CAPSTONE_DEFS_H_
 
-#define CAPSTONE_DEBUG_INFO_EN
+// #define CAPSTONE_DEBUG_INFO_EN
 
 #define CAPSTONE_DEBUG_PRINT(fmt, ...) fprintf(stderr, "[CAPSTONE] " fmt, ##__VA_ARGS__)
 #ifdef CAPSTONE_DEBUG_INFO_EN

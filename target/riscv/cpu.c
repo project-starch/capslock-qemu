@@ -421,10 +421,6 @@ static void rv64_base_cpu_init(Object *obj)
     for(i = 0; i < CAPSTONE_CPMP_COUNT; i ++) {
         env->cpmp[i].tag = false;
     }
-
-    env->cr_tree.gprs = env->gpr;
-    env->cr_tree.free_list = CAP_REV_NODE_ID_NULL;
-    cap_mem_map_init(&cm_map, &env->cr_tree);
 }
 
 static void rv64_sifive_u_cpu_init(Object *obj)

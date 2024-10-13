@@ -1,5 +1,8 @@
 #include "cap_rev_tree.h"
 
+cap_rev_tree_t cr_tree;
+pthread_mutex_t cr_tree_lock;
+
 static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
     int n;
     for(n = 0; n < CAP_REV_TREE_SIZE; n ++) {
@@ -8,15 +11,19 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
             cap_rev_node_id_t nxt = _CAP_REV_NODE(tree, cur).next;
             cap_rev_node_id_t prev = _CAP_REV_NODE(tree, cur).prev;
             bool in_reg = false;
-            int i;
+            int i, n;
             if(nxt != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, nxt).depth > _CAP_REV_NODE(tree, cur).depth &&
                 prev != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, prev).depth >= _CAP_REV_NODE(tree, cur).depth) {
                 break;
             }
-            for (i = 1; i < 32; i ++) {
-                if (tree->gprs[i].tag && tree->gprs[i].val.cap.rev_node_id == n) {
-                    in_reg = true;
-                    break;
+            for (n = 0; n < 2; n ++) {
+                if (!tree->gprs[n])
+                    continue;
+                for (i = 1; i < 32; i ++) {
+                    if (tree->gprs[n][i].tag && tree->gprs[n][i].val.cap.rev_node_id == n) {
+                        in_reg = true;
+                        break;
+                    }
                 }
             }
             if(in_reg)

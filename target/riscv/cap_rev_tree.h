@@ -3,6 +3,7 @@
 
 #include "cap.h"
 #include <stdio.h>
+#include <pthread.h>
 
 #define CAP_REV_TREE_SIZE 65536
 #define _CAP_REV_NODE(tree, node_id) ((tree)->node_pool[node_id])
@@ -25,10 +26,13 @@ struct CapRevTree {
     struct CapRevNode node_pool[CAP_REV_TREE_SIZE];
     uint32_t alloced_n;
     cap_rev_node_id_t free_list;
-    capregval_t *gprs;
+    capregval_t *gprs[2]; // FIXME: this doesn't work for multi-core
 };
 
 typedef struct CapRevTree cap_rev_tree_t;
+
+extern cap_rev_tree_t cr_tree;
+extern pthread_mutex_t cr_tree_lock;
 
 /* initialise the tree and create nodes for genesis caps */
 void cap_rev_tree_init(cap_rev_tree_t *tree,
