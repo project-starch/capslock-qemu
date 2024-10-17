@@ -29,7 +29,6 @@
 #include "cap_mem_map.h"
 #include "cap_rev_tree.h"
 #include "cap_compress.h"
-#include "capstone_helper.h"
 #include "trace.h"
 
 /* Exceptions processing helpers */
@@ -368,10 +367,6 @@ target_ulong helper_mret(CPURISCVState *env)
         }
 
         riscv_cpu_set_virt_enabled(env, prev_virt);
-    }
-
-    if (env->cap_mem) {
-        pc_redirect_to_capregval(env, &env->cepc);
     }
 
     return retpc;
@@ -1225,163 +1220,6 @@ void helper_set_pc_cap(CPURISCVState *env, uint32_t reg) {
 
     env->pc_cap = v->val.cap;
 }
-
-
-void helper_cscall(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
-    assert(rd == rs1);
-
-    CPUState *cs = env_cpu(env);
-    capregval_t *rs1_v;
-    if(rs1 == 0) {
-        rs1_v = &env->cih;
-    } else {
-        rs1_v = &env->gpr[rs1];
-    }
-
-    if(!rs1_v->tag) {
-        CAPSTONE_DEBUG_PRINT("Call requires a capability\n");
-        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
-    }
-
-    if(rs1_v->val.cap.type != CAP_TYPE_SEALED ||
-       rs1_v->val.cap.async != CAP_ASYNC_SYNC) {
-        CAPSTONE_DEBUG_PRINT("Call requires a sealel sync capability\n");
-        riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, GETPC());
-    }
-
-    capfat_t rs1_val = rs1_v->val.cap;
-    rs1_v->tag = false; /* always linear */
-
-    trace_capstone_dom_switch_sync();
-    swap_c_effective_regs(cs->as, env, rs1_val.bounds.base, env->pc);
-
-    // set cra
-    rs1_val.type = CAP_TYPE_SEALEDRET;
-    rs1_val.bounds.cursor = rs1_val.bounds.base;
-    rs1_val.async = CAP_ASYNC_SYNC;
-    rs1_val.reg = rd;
-    capregval_set_cap(&env->gpr[1], &rs1_val);
-}
-
-void helper_csreturn(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
-    CPUState *cs = env_cpu(env);
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
-    capregval_t *rs2_v = &env->gpr[rs2];
-
-    if(rd == 0) {
-        if(rs1_v->tag) {
-            CAPSTONE_DEBUG_PRINT("Return requires an integer as rs1\n");
-            riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
-        }
-
-        env->pc_cap.bounds.cursor = rs1_v->val.scalar;
-        capregval_set_cap(&env->ctvec, &env->pc_cap);
-        cap_set_capregval(&env->pc_cap, &env->cepc);
-        env->pc = env->pc_cap.bounds.cursor;
-        if(env->pc_cap.type != CAP_TYPE_NONLIN) {
-            env->cepc = CAPREGVAL_NULL;
-        }
-    } else {
-        if(!rd_v->tag || rs1_v->tag) {
-            CAPSTONE_DEBUG_PRINT("Return requires a capability and an integer\n");
-            riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
-        }
-
-        if(rd_v->val.cap.type != CAP_TYPE_SEALEDRET && rd_v->val.cap.type != CAP_TYPE_SEALED) {
-            CAPSTONE_DEBUG_PRINT("Return requires a sealed-return capability\n");
-            riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, GETPC());
-        }
-
-        capfat_t rd_cap = rd_v->val.cap;
-        if(rd_cap.type == CAP_TYPE_SEALED) {
-            rd_cap.reg = 0;
-        }
-        capaddr_t base_addr = rd_cap.bounds.base;
-        uint64_t rs2_val = rs2_v->val.scalar;
-
-        switch(rd_cap.async) {
-            case CAP_ASYNC_SYNC:
-                if(rd_cap.reg == 0 && env->cih.tag) {
-                    // cih already contains a capability
-                    // invalid operation
-                    CAPSTONE_DEBUG_PRINT("Return to synchronous sealed-return cap with reg = 0 is only allowed when cih = cnull\n");
-                    riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, GETPC());
-                }
-
-                *rd_v = CAPREGVAL_NULL;
-
-                trace_capstone_dom_switch_sync();
-                swap_c_effective_regs(cs->as, env, base_addr, rs1_v->val.scalar);
-
-                // write return reg
-                if(rd_cap.reg == 0) {
-                    assert(!env->cih.tag);
-                    capregval_set_cap(&env->cih, &rd_cap);
-                    env->cih.val.cap.type = CAP_TYPE_SEALED;
-                    // also deliver the V-interrupts
-
-                    QEMU_IOTHREAD_LOCK_GUARD();
-                    env->mip |= rs2_val;
-                    riscv_cpu_check_interrupts(env);
-                } else {
-                    capregval_set_cap(&env->gpr[rd_cap.reg], &rd_cap);
-                    env->gpr[rd_cap.reg].val.cap.type = CAP_TYPE_SEALED;
-                }
-
-                break;
-            case CAP_ASYNC_ASYNC:
-                rd_cap.type = CAP_TYPE_SEALED;
-                rd_cap.async = CAP_ASYNC_SYNC;
-                capregval_set_cap(&env->cih, &rd_cap);
-                *rd_v = CAPREGVAL_NULL;
-
-                trace_capstone_dom_switch_async(0);
-                swap_domain_scoped_regs(cs->as, env, base_addr, rs1_v->val.scalar, DOM_SCOPED_SWAP_IN);
-
-                // post the interrupts
-                QEMU_IOTHREAD_LOCK_GUARD();
-                env->mip |= rs2_val;
-                riscv_cpu_check_interrupts(env);
-
-                break;
-            default:
-                assert(false);
-        }
-    }
-}
-
-void helper_cscapenter(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
-    // enters the capability mode
-    env->cap_mem = true;
-
-    // generates the genesis capabilities
-    assert(rs1 && rs2); // we do not allow the platform-dependent case for now
-    uint64_t pc_lo_addr = env->gpr[rs1].val.scalar;
-    uint64_t pc_hi_addr = env->gpr[rs2].val.scalar;
-    assert(pc_lo_addr < pc_hi_addr);
-
-    env->pc_cap.bounds.base = pc_lo_addr;
-    env->pc_cap.bounds.end = pc_hi_addr;
-    env->pc_cap.type = CAP_TYPE_LIN;
-    env->pc_cap.perms = CAP_PERMS_RWX;
-
-    env->gpr[10].tag = 1;
-    env->gpr[10].val.cap.bounds.base = 0;
-    env->gpr[10].val.cap.bounds.end = pc_lo_addr;
-    env->gpr[10].val.cap.type = CAP_TYPE_LIN;
-    env->gpr[10].val.cap.perms = CAP_PERMS_RWX;
-
-    env->gpr[11].tag = 1;
-    env->gpr[11].val.cap.bounds.base = pc_hi_addr;
-    env->gpr[11].val.cap.bounds.end = (uint64_t)1 << 63; // TODO: should be 2**64
-    env->gpr[11].val.cap.type = CAP_TYPE_LIN;
-    env->gpr[11].val.cap.perms = CAP_PERMS_RWX;
-
-    cap_rev_tree_init(&cr_tree, &env->pc_cap.rev_node_id,
-        &env->gpr[10].val.cap.rev_node_id, &env->gpr[11].val.cap.rev_node_id);
-}
-
 
 /* helpers for Capstone debug instructions */
 

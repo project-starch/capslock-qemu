@@ -35,7 +35,6 @@
 #include "debug.h"
 #include "tcg/oversized-guest.h"
 #include "capstone_defs.h"
-#include "capstone_helper.h"
 #include "exec/cpu_ldst.h"
 
 int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch)
@@ -1756,34 +1755,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                   riscv_cpu_get_trap_name(cause, async));
 
     /* Capstone-specific exception/interrupt handling */
-    if (async && env->cap_mem && env->cis && capstone_int_can_take(env)) {
-        /* handle H-interrupt in C-mode */
-        // need to look at cih
-        // can deliver the exception
-        // TODO: need to save more state for S/U modes
-
-        // assert(env->priv < PRV_C); /* TODO: a hack */
-
-        capaddr_t base_addr = env->cih.val.cap.bounds.base;
-
-        trace_capstone_dom_switch_async(1);
-        trace_capstone_h_int(cause, env->priv);
-        swap_domain_scoped_regs(cs->as, env, base_addr, env->pc, DOM_SCOPED_SWAP_OUT);
-
-        env->cih.val.cap.type = CAP_TYPE_SEALEDRET;
-        env->cih.val.cap.bounds.cursor = env->cih.val.cap.bounds.base;
-        env->cih.val.cap.reg = 0;
-        env->cih.val.cap.async = CAP_ASYNC_ASYNC;
-
-        env->gpr[1] = env->cih;
-        env->cih = CAPREGVAL_NULL; // disabling further interrupts
-
-        env->gpr[10].tag = false;
-        env->gpr[10].val.scalar = cause;
-        env->cic = cause; // TODO: probably remove CIC
-
-        riscv_cpu_set_mode(env, PRV_C);
-    } else if (env->priv <= PRV_S &&
+    if (env->priv <= PRV_S &&
         cause < TARGET_LONG_BITS && ((deleg >> cause) & 1)) {
         // TODO: V-interrupts might also be handled here
         /* handle the trap in S-mode */
@@ -1853,50 +1825,19 @@ void riscv_cpu_do_interrupt(CPUState *cs)
             riscv_cpu_set_virt_enabled(env, 0);
         }
 
-        if(env->cap_mem) {
-            /* handle exceptions in C mode */
-            /* This might also be a V-interrupt */
-            assert(env->priv < PRV_C); /* TODO: a hack */
-
-            s = env->mstatus;
-            s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));
-            s = set_field(s, MSTATUS_MPP, env->priv);
-            s = set_field(s, MSTATUS_MIE, 0);
-            env->mstatus = s;
-            env->mcause = cause | ~(((target_ulong)-1) >> async);
-            if(env->priv == PRV_C) {
-                // horizontal trap
-                env->pc_cap.bounds.cursor = env->pc;
-                capregval_set_cap(&env->cepc, &env->pc_cap);
-            } else {
-                capregval_set_scalar(&env->cepc, env->pc);
-            }
-            env->mtval = tval;
-            env->mtval2 = mtval2;
-            env->mtinst = tinst;
-            assert(env->ctvec.tag);
-            pc_redirect_to_cap(env, &env->ctvec.val.cap);
-
-            if(async) {
-                trace_capstone_v_int(cause, PRV_C, env->priv);
-                assert(cause != IRQ_S_EXT);
-            }
-            riscv_cpu_set_mode(env, PRV_C);
-        } else {
-            s = env->mstatus;
-            s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));
-            s = set_field(s, MSTATUS_MPP, env->priv);
-            s = set_field(s, MSTATUS_MIE, 0);
-            env->mstatus = s;
-            env->mcause = cause | ~(((target_ulong)-1) >> async);
-            env->mepc = env->pc;
-            env->mtval = tval;
-            env->mtval2 = mtval2;
-            env->mtinst = tinst;
-            env->pc = (env->mtvec >> 2 << 2) +
-                    ((async && (env->mtvec & 3) == 1) ? cause * 4 : 0);
-            riscv_cpu_set_mode(env, PRV_M);
-        }
+        s = env->mstatus;
+        s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));
+        s = set_field(s, MSTATUS_MPP, env->priv);
+        s = set_field(s, MSTATUS_MIE, 0);
+        env->mstatus = s;
+        env->mcause = cause | ~(((target_ulong)-1) >> async);
+        env->mepc = env->pc;
+        env->mtval = tval;
+        env->mtval2 = mtval2;
+        env->mtinst = tinst;
+        env->pc = (env->mtvec >> 2 << 2) +
+                ((async && (env->mtvec & 3) == 1) ? cause * 4 : 0);
+        riscv_cpu_set_mode(env, PRV_M);
    }
 
     /*
@@ -1914,32 +1855,29 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 
 
 bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessType access_type, uintptr_t retaddr) {
-    int i;
     bool access_allowed;
     CPURISCVState* env = cs->env_ptr;
-    if(!env->cap_mem || env->priv == PRV_C)
-        access_allowed = true;
-    else {
-        capperms_t access = CAP_PERMS_NA;
-        switch(access_type) {
-            case MMU_DATA_LOAD:
-            case MMU_CAP_DATA_LOAD:
-                access = CAP_PERMS_RO;
-                break;
-            case MMU_DATA_STORE:
-            case MMU_CAP_DATA_STORE:
-                access = CAP_PERMS_WO;
-                break;
-            case MMU_INST_FETCH:
-            case MMU_CAP_INST_FETCH:
-                access = CAP_PERMS_XO;
-                break;
-        }
-        access_allowed = false;
-        for(i = 0; i < CAPSTONE_CPMP_COUNT; i ++) {
-            access_allowed = access_allowed || capreg_allow_access(&env->cpmp[i], (capaddr_t)physaddr, (capaddr_t)size, access);
-        }
-    }
+
+    access_allowed = true;
+    // capperms_t access = CAP_PERMS_NA;
+    // switch(access_type) {
+    //     case MMU_DATA_LOAD:
+    //     case MMU_CAP_DATA_LOAD:
+    //         access = CAP_PERMS_RO;
+    //         break;
+    //     case MMU_DATA_STORE:
+    //     case MMU_CAP_DATA_STORE:
+    //         access = CAP_PERMS_WO;
+    //         break;
+    //     case MMU_INST_FETCH:
+    //     case MMU_CAP_INST_FETCH:
+    //         access = CAP_PERMS_XO;
+    //         break;
+    // }
+    // access_allowed = false;
+    // for(i = 0; i < CAPSTONE_CPMP_COUNT; i ++) {
+    //     access_allowed = access_allowed || capreg_allow_access(&env->cpmp[i], (capaddr_t)physaddr, (capaddr_t)size, access);
+    // }
     if(!access_allowed) {
         // set up exception
         switch(access_type) {
@@ -1969,7 +1907,7 @@ bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessT
  * This can only be called immediately after a memory access.
  */
 uintptr_t capstone_get_haddr(CPURISCVState *env, vaddr addr, MMUAccessType access_type) {
-#ifdef CAPSTONE_USE_VADDR
+#if defined(CAPSTONE_USE_VADDR) || defined(CONFIG_USER_ONLY)
     return (hwaddr)addr;
 #else
     unsigned int mmu_idx = cpu_mmu_index(env, false);

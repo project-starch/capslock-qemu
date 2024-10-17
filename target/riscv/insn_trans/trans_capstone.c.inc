@@ -207,44 +207,6 @@ static bool trans_cscbnz(DisasContext *ctx, arg_cscbnz *a) {
     return true;
 }
 
-static bool trans_cscall(DisasContext *ctx, arg_cscall *a) {
-    TCGv_i32 rd = tcg_constant_i32(a->rd);
-    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-
-    decode_save_opc(ctx);
-    translator_io_start(&ctx->base);
-    gen_update_pc(ctx, ctx->cur_insn_len);
-    gen_helper_cscall(cpu_env, rd, rs1);
-    exit_tb(ctx);
-    ctx->base.is_jmp = DISAS_NORETURN;
-
-    return true;
-}
-
-static bool trans_csreturn(DisasContext *ctx, arg_csreturn *a) {
-    TCGv_i32 rd = tcg_constant_i32(a->rd);
-    TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
-    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-
-    decode_save_opc(ctx);
-    translator_io_start(&ctx->base);
-    gen_update_pc(ctx, ctx->cur_insn_len);
-    gen_helper_csreturn(cpu_env, rd, rs1, rs2);
-    exit_tb(ctx);
-    ctx->base.is_jmp = DISAS_NORETURN; /* This might change priv */
-
-    return true;
-}
-
-static bool trans_cscapenter(DisasContext *ctx, arg_cscapenter *a) {
-    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-    TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
-
-    gen_helper_cscapenter(cpu_env, rs1, rs2);
-
-    return true;
-}
-
 /* Capstone debug instructions */
 
 static bool trans_csdebuggencap(DisasContext *ctx, arg_csdebuggencap *a) {

@@ -4067,6 +4067,8 @@ static RISCVException write_jvt(CPURISCVState *env, int csrno,
 
 /* Capstone CSRs */
 
+#ifndef CONFIG_USER_ONLY
+
 static RISCVException read_cis(CPURISCVState *env, int csrno, target_ulong *val) {
     *val = env->cis;
     return RISCV_EXCP_NONE;
@@ -4109,6 +4111,7 @@ static RISCVException write_offsetmmu(CPURISCVState *env, int csrno, target_ulon
     env->offsetmmu = val;
     return RISCV_EXCP_NONE;
 }
+#endif
 
 
 /*

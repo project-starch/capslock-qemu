@@ -47,26 +47,27 @@ void cpu_loop(CPURISCVState *env)
             break;
         case RISCV_EXCP_U_ECALL:
             env->pc += 4;
-            if (env->gpr[xA7] == TARGET_NR_arch_specific_syscall + 15) {
+            if (env->gpr[xA7].val.scalar == TARGET_NR_arch_specific_syscall + 15) {
                 /* riscv_flush_icache_syscall is a no-op in QEMU as
                    self-modifying code is automatically detected */
                 ret = 0;
             } else {
                 ret = do_syscall(env,
                                  env->gpr[(env->elf_flags & EF_RISCV_RVE)
-                                    ? xT0 : xA7],
-                                 env->gpr[xA0],
-                                 env->gpr[xA1],
-                                 env->gpr[xA2],
-                                 env->gpr[xA3],
-                                 env->gpr[xA4],
-                                 env->gpr[xA5],
+                                    ? xT0 : xA7].val.scalar,
+                                 env->gpr[xA0].val.scalar,
+                                 env->gpr[xA1].val.scalar,
+                                 env->gpr[xA2].val.scalar,
+                                 env->gpr[xA3].val.scalar,
+                                 env->gpr[xA4].val.scalar,
+                                 env->gpr[xA5].val.scalar,
                                  0, 0);
             }
             if (ret == -QEMU_ERESTARTSYS) {
                 env->pc -= 4;
             } else if (ret != -QEMU_ESIGRETURN) {
-                env->gpr[xA0] = ret;
+                env->gpr[xA0].val.scalar = ret;
+                env->gpr[xA0].tag = false;
             }
             if (cs->singlestep_enabled) {
                 goto gdbstep;
@@ -101,7 +102,7 @@ void target_cpu_copy_regs(CPUArchState *env, struct target_pt_regs *regs)
     struct image_info *info = ts->info;
 
     env->pc = regs->sepc;
-    env->gpr[xSP] = regs->sp;
+    env->gpr[xSP].val.scalar = regs->sp;
     env->elf_flags = info->elf_flags;
 
     if ((env->misa_ext & RVE) && !(env->elf_flags & EF_RISCV_RVE)) {

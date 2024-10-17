@@ -39,6 +39,7 @@
 #include "tcg/tcg.h"
 #include "cap.h"
 #include "capstone_defs.h"
+#include "cap_rev_tree.h"
 #include "cap_mem_map.h"
 
 /* RISC-V CPU definitions */
@@ -1681,6 +1682,14 @@ static void riscv_cpu_init(Object *obj)
 #ifndef CONFIG_USER_ONLY
     qdev_init_gpio_in(DEVICE(cpu), riscv_cpu_set_irq,
                       IRQ_LOCAL_MAX + IRQ_LOCAL_GUEST_MAX);
+#else
+
+    cr_tree.gprs[0] = cpu->env.gpr;
+    cr_tree.free_list = CAP_REV_NODE_ID_NULL;
+    cap_mem_map_init(&cm_map, &cr_tree);
+
+    pthread_mutex_init(&cr_tree_lock, NULL);
+    pthread_mutex_init(&cm_map_lock, NULL);
 #endif /* CONFIG_USER_ONLY */
 }
 

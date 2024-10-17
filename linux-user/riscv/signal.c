@@ -76,7 +76,7 @@ static void setup_sigcontext(struct target_sigcontext *sc, CPURISCVState *env)
     __put_user(env->pc, &sc->pc);
 
     for (i = 1; i < 32; i++) {
-        __put_user(env->gpr[i], &sc->gpr[i - 1]);
+        __put_user(env->gpr[i].val.scalar, &sc->gpr[i - 1]);
     }
     for (i = 0; i < 32; i++) {
         __put_user(env->fpr[i], &sc->fpr[i]);
@@ -120,11 +120,11 @@ void setup_rt_frame(int sig, struct target_sigaction *ka,
     tswap_siginfo(&frame->info, info);
 
     env->pc = ka->_sa_handler;
-    env->gpr[xSP] = frame_addr;
-    env->gpr[xA0] = sig;
-    env->gpr[xA1] = frame_addr + offsetof(struct target_rt_sigframe, info);
-    env->gpr[xA2] = frame_addr + offsetof(struct target_rt_sigframe, uc);
-    env->gpr[xRA] = default_rt_sigreturn;
+    env->gpr[xSP].val.scalar = frame_addr;
+    env->gpr[xA0].val.scalar = sig;
+    env->gpr[xA1].val.scalar = frame_addr + offsetof(struct target_rt_sigframe, info);
+    env->gpr[xA2].val.scalar = frame_addr + offsetof(struct target_rt_sigframe, uc);
+    env->gpr[xRA].val.scalar = default_rt_sigreturn;
 
     return;
 
@@ -143,7 +143,7 @@ static void restore_sigcontext(CPURISCVState *env, struct target_sigcontext *sc)
     __get_user(env->pc, &sc->pc);
 
     for (i = 1; i < 32; ++i) {
-        __get_user(env->gpr[i], &sc->gpr[i - 1]);
+        __get_user(env->gpr[i].val.scalar, &sc->gpr[i - 1]);
     }
     for (i = 0; i < 32; ++i) {
         __get_user(env->fpr[i], &sc->fpr[i]);
@@ -176,7 +176,7 @@ long do_rt_sigreturn(CPURISCVState *env)
     struct target_rt_sigframe *frame;
     abi_ulong frame_addr;
 
-    frame_addr = env->gpr[xSP];
+    frame_addr = env->gpr[xSP].val.scalar;
     trace_user_do_sigreturn(env, frame_addr);
     if (!lock_user_struct(VERIFY_READ, frame, frame_addr, 1)) {
         goto badframe;
