@@ -26,6 +26,9 @@
 #include "elf.h"
 #include "semihosting/common-semi.h"
 
+extern unsigned long guest_stack_size;
+void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v);
+
 void cpu_loop(CPURISCVState *env)
 {
     CPUState *cs = env_cpu(env);
@@ -102,7 +105,8 @@ void target_cpu_copy_regs(CPUArchState *env, struct target_pt_regs *regs)
     struct image_info *info = ts->info;
 
     env->pc = regs->sepc;
-    env->gpr[xSP].val.scalar = regs->sp;
+    helper_csdebuggencap(env, xSP, regs->sp - guest_stack_size, regs->sp);
+    env->gpr[xSP].val.cap.bounds.cursor = regs->sp;
     env->elf_flags = info->elf_flags;
 
     if ((env->misa_ext & RVE) && !(env->elf_flags & EF_RISCV_RVE)) {
