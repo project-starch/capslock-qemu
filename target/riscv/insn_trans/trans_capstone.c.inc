@@ -92,11 +92,15 @@ static bool trans_cstighten(DisasContext *ctx, arg_cstighten *a) {
     return true;
 }
 
-static bool trans_csinit(DisasContext *ctx, arg_csinit *a) {
-    TCGv_i32 rd = tcg_constant_i32(a->rd);
+static bool trans_cssavesp(DisasContext *ctx, arg_cssavesp *a) {
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-    TCGv_i32 rs2 = tcg_constant_i32(a->rs2);
-    gen_helper_csinit(cpu_env, rd, rs1, rs2);
+    gen_helper_cssavesp(cpu_env, rs1);
+    return true;
+}
+
+static bool trans_csloadsp(DisasContext *ctx, arg_csloadsp *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    gen_helper_csloadsp(cpu_env, rd);
     return true;
 }
 

@@ -871,27 +871,32 @@ void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
     }
 }
 
-void helper_csinit(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
-    capregval_t *rs2_v = &env->gpr[rs2];
+/* Only single-threaded for now */
+#define SP_STACK_SIZE 1024
+static capregval_t sp_stack[SP_STACK_SIZE];
+static int sp_stack_n;
 
-    assert(rs1_v->tag && !rs2_v->tag);
-    assert(rs1_v->val.cap.type == CAP_TYPE_UNINIT);
-    assert(rs1_v->val.cap.bounds.cursor == rs1_v->val.cap.bounds.end);
 
-    capaddr_t offset = rs2_v->val.scalar;
-
-    if(rs1 != rd) {
-        reg_overwrite(&cr_tree, rd_v);
-        *rd_v = *rs1_v;
-        if(!captype_is_copyable(rs1_v->val.cap.type)) {
-            *rs1_v = CAPREGVAL_NULL;
-        }
+void helper_cssavesp(CPURISCVState *env, uint32_t rs1) {
+    assert(sp_stack_n < SP_STACK_SIZE);
+    sp_stack[sp_stack_n] = env->gpr[rs1];
+    ++ sp_stack_n;
+    if (env->gpr[rs1].tag) {
+        pthread_mutex_lock(&cr_tree_lock);
+        cap_rev_tree_update_refcount(&cr_tree, env->gpr[rs1].val.cap.rev_node_id, 1);
+        pthread_mutex_unlock(&cr_tree_lock);
     }
+}
 
-    rd_v->val.cap.type = CAP_TYPE_LIN;
-    rd_v->val.cap.bounds.cursor = rd_v->val.cap.bounds.base + offset;
+void helper_csloadsp(CPURISCVState *env, uint32_t rd) {
+    assert(sp_stack_n > 0);
+    -- sp_stack_n;
+    env->gpr[rd] = sp_stack[sp_stack_n];
+    if (sp_stack[sp_stack_n].tag) {
+        pthread_mutex_lock(&cr_tree_lock);
+        cap_rev_tree_update_refcount(&cr_tree, env->gpr[rd].val.cap.rev_node_id, -1);
+        pthread_mutex_unlock(&cr_tree_lock);
+    }
 }
 
 void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
