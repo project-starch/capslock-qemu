@@ -104,6 +104,13 @@ static bool trans_csloadsp(DisasContext *ctx, arg_csloadsp *a) {
     return true;
 }
 
+static bool trans_csgetsp(DisasContext *ctx, arg_csgetsp *a) {
+    TCGv_i32 rd = tcg_constant_i32(a->rd);
+    TCGv imm = tcg_constant_tl(a->imm);
+    gen_helper_csgetsp(cpu_env, rd, imm);
+    return true;
+}
+
 static bool trans_csseal(DisasContext *ctx, arg_csseal *a) {
     TCGv_i32 rd = tcg_constant_i32(a->rd);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
@@ -165,51 +172,6 @@ static bool trans_csccsrrw(DisasContext *ctx, arg_csccsrrw *a) {
 //     return true;
 // }
 
-
-static bool trans_cscjalr(DisasContext *ctx, arg_cscjalr *a) {
-    // change the target pc cap and save the current pc cap
-    // can only be done in helper for now
-    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
-    TCGv_i32 rd = tcg_constant_i32(a->rd);
-    TCGv target_pc = tcg_temp_new();
-    TCGv succ_pc = tcg_temp_new();
-
-    // TODO: alignment checks
-
-    tcg_gen_addi_tl(target_pc, get_gpr(ctx, a->rs1, EXT_NONE), a->imm);
-
-    gen_pc_plus_diff(succ_pc, ctx, ctx->cur_insn_len);
-    gen_helper_cjalr_switch_caps(cpu_env, rd, rs1, succ_pc);
-
-    tcg_gen_mov_tl(cpu_pc, target_pc);
-    lookup_and_goto_ptr(ctx);
-    ctx->base.is_jmp = DISAS_NORETURN;
-
-    return true;
-}
-
-static bool trans_cscbnz(DisasContext *ctx, arg_cscbnz *a) {
-    TCGv src1 = get_gpr(ctx, a->rs1, EXT_NONE);
-    TCGLabel *taken_l = gen_new_label();
-    TCGv target_pc = tcg_temp_new();
-    TCGv_i32 rd = tcg_constant_i32(a->rd);
-    target_ulong orig_pc_save = ctx->pc_save;
-
-    tcg_gen_brcondi_tl(TCG_COND_NE, src1, 0, taken_l);
-    gen_goto_tb(ctx, 1, ctx->cur_insn_len);
-    ctx->pc_save = orig_pc_save;
-
-    gen_set_label(taken_l);
-
-    tcg_gen_addi_tl(target_pc, get_gpr(ctx, a->rd, EXT_NONE), a->imm);
-    gen_helper_set_pc_cap(cpu_env, rd); // set pc <- rd
-    tcg_gen_mov_tl(cpu_pc, target_pc);
-    tcg_gen_goto_tb(0);
-    tcg_gen_exit_tb(ctx->base.tb, 0);
-    ctx->base.is_jmp = DISAS_NORETURN;
-
-    return true;
-}
 
 /* Capstone debug instructions */
 

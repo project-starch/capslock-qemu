@@ -1202,6 +1202,7 @@ DEF_HELPER_2(csdrop, void, env, i32)
 DEF_HELPER_4(csccsrrw, void, env, i32, i32, tl)
 DEF_HELPER_2(cssavesp, void, env, i32)
 DEF_HELPER_2(csloadsp, void, env, i32)
+DEF_HELPER_3(csgetsp, void, env, i32, tl)
 
 DEF_HELPER_2(cap_scrub, void, env, tl)
 DEF_HELPER_4(load_with_cap, void, env, tl, i32, i32)
@@ -1214,7 +1215,6 @@ DEF_HELPER_4(move_cap, void, env, tl, i32, i32)
 DEF_HELPER_4(set_cap_mem_map, void, env, i32, tl, tl)
 DEF_HELPER_3(remove_cap_mem_map, void, env, tl, i32)
 
-DEF_HELPER_4(cjalr_switch_caps, void, env, i32, i32, tl)
 DEF_HELPER_2(set_pc_cap, void, env, i32)
 
 /* Helpers for debug instructions */

@@ -753,23 +753,25 @@ void helper_csshrink(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2
     capregval_t *rs1_v = &env->gpr[rs1];
     capregval_t *rs2_v = &env->gpr[rs2];
 
-    assert(rd_v->tag && !rs1_v->tag && !rs2_v->tag);
-    assert(rd_v->val.cap.type == CAP_TYPE_LIN || rd_v->val.cap.type == CAP_TYPE_NONLIN ||
-           rd_v->val.cap.type == CAP_TYPE_UNINIT);
-
     capaddr_t base = rs1_v->val.scalar;
     capaddr_t end = rs2_v->val.scalar;
 
     assert(base < end);
-    assert(base >= rd_v->val.cap.bounds.base && end <= rd_v->val.cap.bounds.end);
+    assert(
+        !rs1_v->tag
+        || (base >= rs1_v->val.cap.bounds.base && end <= rs1_v->val.cap.bounds.end)
+    );
 
+    *rd_v = *rs1_v;
     rd_v->val.cap.bounds.base = base;
     rd_v->val.cap.bounds.end = end;
 
-    if(rd_v->val.cap.bounds.cursor < base) {
-        rd_v->val.cap.bounds.cursor = base;
-    } else if(rd_v->val.cap.bounds.cursor > end) {
-        rd_v->val.cap.bounds.cursor = end;
+    if(rd_v->tag) {
+        if(rd_v->val.cap.bounds.cursor < base) {
+            rd_v->val.cap.bounds.cursor = base;
+        } else if(rd_v->val.cap.bounds.cursor > end) {
+            rd_v->val.cap.bounds.cursor = end;
+        }
     }
 }
 
@@ -777,11 +779,13 @@ void helper_csshrinkto(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t s
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
 
-    assert(rs1_v->tag);
-    assert(rs1_v->val.cap.type == CAP_TYPE_LIN || rs1_v->val.cap.type == CAP_TYPE_NONLIN ||
-           rs1_v->val.cap.type == CAP_TYPE_UNINIT);
-    assert(rs1_v->val.cap.bounds.cursor >= rs1_v->val.cap.bounds.base &&
-            rs1_v->val.cap.bounds.cursor + size <= rs1_v->val.cap.bounds.end);
+    // assert(rs1_v->tag);
+    // assert(rs1_v->val.cap.type == CAP_TYPE_LIN || rs1_v->val.cap.type == CAP_TYPE_NONLIN ||
+    //        rs1_v->val.cap.type == CAP_TYPE_UNINIT);
+    // fprintf(stderr, "Shrink to %lx %lx %lx %lx\n", rs1_v->val.cap.bounds.base,
+    // rs1_v->val.cap.bounds.end, rs1_v->val.cap.bounds.cursor, size);
+    // assert(!rs1_v->tag || (rs1_v->val.cap.bounds.cursor >= rs1_v->val.cap.bounds.base &&
+    //         rs1_v->val.cap.bounds.cursor + size <= rs1_v->val.cap.bounds.end));
 
     reg_overwrite(&cr_tree, rd_v);
     // cap_rev_tree_update_refcount(&cr_tree, rs1_v->val.cap.rev_node_id, 1);
@@ -872,7 +876,7 @@ void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
 }
 
 /* Only single-threaded for now */
-#define SP_STACK_SIZE 1024
+#define SP_STACK_SIZE (1024 * 1024)
 static capregval_t sp_stack[SP_STACK_SIZE];
 static int sp_stack_n;
 
@@ -897,6 +901,11 @@ void helper_csloadsp(CPURISCVState *env, uint32_t rd) {
         cap_rev_tree_update_refcount(&cr_tree, env->gpr[rd].val.cap.rev_node_id, -1);
         pthread_mutex_unlock(&cr_tree_lock);
     }
+}
+
+void helper_csgetsp(CPURISCVState *env, uint32_t rd, uint64_t idx) {
+    assert(sp_stack_n > idx);
+    env->gpr[rd] = sp_stack[sp_stack_n - 1 - idx]
 }
 
 void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
@@ -1194,24 +1203,6 @@ void helper_remove_cap_mem_map(CPURISCVState *env, uint64_t addr, uint32_t memop
 }
 
 /* helpers for Capstone control transfer instructions */
-
-void helper_cjalr_switch_caps(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t succ_pc) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
-
-    // rd <- pc <- rs1
-    capfat_t pc_cap_v = env->pc_cap;
-    if(!rs1_v->tag) {
-        CAPSTONE_DEBUG_PRINT("cs.cjalr requires capability in rs1\n");
-        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
-    }
-
-    env->pc_cap = rs1_v->val.cap;
-
-    pc_cap_v.bounds.cursor = succ_pc;
-    rd_v->val.cap = pc_cap_v;
-    rd_v->tag = true;
-}
 
 /* Write the content of the specified register into PC reg */
 /* This does not touch PC itself */
