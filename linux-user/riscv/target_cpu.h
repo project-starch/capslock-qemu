@@ -6,9 +6,11 @@ static inline void cpu_clone_regs_child(CPURISCVState *env, target_ulong newsp,
 {
     if (newsp) {
         env->gpr[xSP].val.scalar = newsp;
+        env->gpr[xSP].tag = false;
     }
 
     env->gpr[xA0].val.scalar = 0;
+    env->gpr[xA0].tag = false;
 }
 
 static inline void cpu_clone_regs_parent(CPURISCVState *env, unsigned flags)

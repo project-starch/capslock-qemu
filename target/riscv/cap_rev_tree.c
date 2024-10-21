@@ -16,7 +16,7 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
                 prev != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, prev).depth >= _CAP_REV_NODE(tree, cur).depth) {
                 break;
             }
-            for (n = 0; n < 2; n ++) {
+            for (n = 0; n < CAP_REV_MAX_THREADS; n ++) {
                 if (!tree->gprs[n])
                     continue;
                 for (i = 1; i < 32; i ++) {

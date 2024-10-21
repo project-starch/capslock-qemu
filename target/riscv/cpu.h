@@ -125,6 +125,7 @@ typedef struct PMUCTRState {
     target_ulong irq_overflow_left;
 } PMUCTRState;
 
+#define SP_STACK_SIZE (1024 * 64)
 struct CPUArchState {
     // target_ulong gpr[32];
     capregval_t gpr[32];
@@ -396,6 +397,8 @@ struct CPUArchState {
     capboundsfat_t load_cap_bounds;
 
     uint64_t capstone_debug_counters[32];
+    capregval_t sp_stack[SP_STACK_SIZE];
+    int sp_stack_n;
 
 #ifdef CONFIG_KVM
     /* kvm timer */
@@ -431,6 +434,9 @@ struct ArchCPU {
     uint32_t pmu_avail_ctrs;
     /* Mapping of events to counters */
     GHashTable *pmu_event_ctr_map;
+
+    /* Thread ID used for maintaining the rev tree */
+    int rev_tree_thread_id;
 };
 
 static inline int riscv_has_ext(CPURISCVState *env, target_ulong ext)

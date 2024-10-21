@@ -1683,14 +1683,35 @@ static void riscv_cpu_init(Object *obj)
     qdev_init_gpio_in(DEVICE(cpu), riscv_cpu_set_irq,
                       IRQ_LOCAL_MAX + IRQ_LOCAL_GUEST_MAX);
 #else
+    static int cpu_count = 0;
 
-    cr_tree.gprs[0] = cpu->env.gpr;
-    cr_tree.free_list = CAP_REV_NODE_ID_NULL;
-    cap_mem_map_init(&cm_map, &cr_tree);
+    cpu->rev_tree_thread_id = cpu_count;
+    cr_tree.gprs[cpu_count ++] = cpu->env.gpr;
 
-    pthread_mutex_init(&cr_tree_lock, NULL);
-    pthread_mutex_init(&cm_map_lock, NULL);
+    // update the refcount
+    pthread_mutex_lock(&cr_tree_lock);
+    for(int i = 0; i < cpu->env.sp_stack_n; i ++) {
+        if(cpu->env.sp_stack[i].tag) {
+            cap_rev_tree_update_refcount(&cr_tree, cpu->env.sp_stack[i].val.cap.rev_node_id, 1);
+        }
+    }
+    pthread_mutex_unlock(&cr_tree_lock);
 #endif /* CONFIG_USER_ONLY */
+}
+
+static void riscv_cpu_finalize(Object *obj) {
+    RISCVCPU *cpu = RISCV_CPU(obj);
+
+    // we simply mark the thread as missing
+    cr_tree.gprs[cpu->rev_tree_thread_id] = NULL;
+    // destroy all remaining capabilities on stack
+    pthread_mutex_lock(&cr_tree_lock);
+    for(int i = 0; i < cpu->env.sp_stack_n; i ++) {
+        if(cpu->env.sp_stack[i].tag) {
+            cap_rev_tree_update_refcount(&cr_tree, cpu->env.sp_stack[i].val.cap.rev_node_id, -1);
+        }
+    }
+    pthread_mutex_unlock(&cr_tree_lock);
 }
 
 typedef struct RISCVCPUMisaExtConfig {
@@ -2340,6 +2361,7 @@ static const TypeInfo riscv_cpu_type_infos[] = {
         .instance_size = sizeof(RISCVCPU),
         .instance_align = __alignof__(RISCVCPU),
         .instance_init = riscv_cpu_init,
+        .instance_finalize = riscv_cpu_finalize,
         .abstract = true,
         .class_size = sizeof(RISCVCPUClass),
         .class_init = riscv_cpu_class_init,

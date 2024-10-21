@@ -779,6 +779,8 @@ void helper_csshrinkto(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t s
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
 
+    assert((int64_t)size >= 0);
+
     // assert(rs1_v->tag);
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN || rs1_v->val.cap.type == CAP_TYPE_NONLIN ||
     //        rs1_v->val.cap.type == CAP_TYPE_UNINIT);
@@ -875,16 +877,12 @@ void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
     }
 }
 
-/* Only single-threaded for now */
-#define SP_STACK_SIZE (1024 * 1024)
-static capregval_t sp_stack[SP_STACK_SIZE];
-static int sp_stack_n;
-
 
 void helper_cssavesp(CPURISCVState *env, uint32_t rs1) {
-    assert(sp_stack_n < SP_STACK_SIZE);
-    sp_stack[sp_stack_n] = env->gpr[rs1];
-    ++ sp_stack_n;
+    assert(env->sp_stack_n < SP_STACK_SIZE);
+    env->sp_stack[env->sp_stack_n] = env->gpr[rs1];
+    ++ env->sp_stack_n;
+    // fprintf(stderr, "Push %lx %lx\n", env->gpr[rs1].val.cap.bounds.base, env->gpr[rs1].val.cap.bounds.end);
     if (env->gpr[rs1].tag) {
         pthread_mutex_lock(&cr_tree_lock);
         cap_rev_tree_update_refcount(&cr_tree, env->gpr[rs1].val.cap.rev_node_id, 1);
@@ -893,10 +891,10 @@ void helper_cssavesp(CPURISCVState *env, uint32_t rs1) {
 }
 
 void helper_csloadsp(CPURISCVState *env, uint32_t rd) {
-    assert(sp_stack_n > 0);
-    -- sp_stack_n;
-    env->gpr[rd] = sp_stack[sp_stack_n];
-    if (sp_stack[sp_stack_n].tag) {
+    assert(env->sp_stack_n > 0);
+    -- env->sp_stack_n;
+    env->gpr[rd] = env->sp_stack[env->sp_stack_n];
+    if (env->sp_stack[env->sp_stack_n].tag) {
         pthread_mutex_lock(&cr_tree_lock);
         cap_rev_tree_update_refcount(&cr_tree, env->gpr[rd].val.cap.rev_node_id, -1);
         pthread_mutex_unlock(&cr_tree_lock);
@@ -904,8 +902,10 @@ void helper_csloadsp(CPURISCVState *env, uint32_t rd) {
 }
 
 void helper_csgetsp(CPURISCVState *env, uint32_t rd, uint64_t idx) {
-    assert(sp_stack_n > idx);
-    env->gpr[rd] = sp_stack[sp_stack_n - 1 - idx]
+    assert(env->sp_stack_n > idx);
+    capregval_t *sp_v = &env->sp_stack[env->sp_stack_n - 1 - idx];
+    // fprintf(stderr, "Get %u <- %lu = %lx %lx\n", rd, idx, sp_v->val.cap.bounds.base, sp_v->val.cap.bounds.end);
+    env->gpr[rd] = *sp_v;
 }
 
 void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
@@ -1222,6 +1222,7 @@ void helper_set_pc_cap(CPURISCVState *env, uint32_t reg) {
 void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
     // CAPSTONE_DEBUG_PRINT("Generating cap with (0x%lx, 0x%lx)\n", rs1_v, rs2_v);
     // fprintf(stderr, "G %lx %lx\n", rs1_v, rs2_v);
+    assert(rs1_v <= rs2_v);
     capregval_t *rd_v = &env->gpr[rd];
     reg_overwrite(&cr_tree, rd_v);
     capfat_t *cap = &rd_v->val.cap;

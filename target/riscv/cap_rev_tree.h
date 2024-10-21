@@ -10,6 +10,8 @@
 // #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0 && !_CAP_REV_NODE(tree, node_id).valid)
 #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0)
 
+#define CAP_REV_MAX_THREADS 64
+
 static const cap_rev_node_id_t CAP_REV_NODE_ID_NULL = -1;
 
 struct CapRevNode {
@@ -26,7 +28,7 @@ struct CapRevTree {
     struct CapRevNode node_pool[CAP_REV_TREE_SIZE];
     uint32_t alloced_n;
     cap_rev_node_id_t free_list;
-    capregval_t *gprs[2]; // FIXME: this doesn't work for multi-core
+    capregval_t *gprs[CAP_REV_MAX_THREADS]; // FIXME: this doesn't work for multi-core
 };
 
 typedef struct CapRevTree cap_rev_tree_t;
