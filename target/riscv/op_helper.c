@@ -870,8 +870,9 @@ void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
             cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.rev_node_id, true);
             cap_rev_tree_invalidate(&cr_tree, rs1_v->val.cap.rev_node_id);
         } else {
-            CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability!\n");
-            riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
+            // FIXME: add a separate one with checks for heap double free
+            // CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability!\n");
+            // riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
         }
         pthread_mutex_unlock(&cr_tree_lock);
     }
@@ -896,7 +897,7 @@ void helper_csloadsp(CPURISCVState *env, uint32_t rd) {
     env->gpr[rd] = env->sp_stack[env->sp_stack_n];
     if (env->sp_stack[env->sp_stack_n].tag) {
         pthread_mutex_lock(&cr_tree_lock);
-        cap_rev_tree_update_refcount(&cr_tree, env->gpr[rd].val.cap.rev_node_id, -1);
+        cap_rev_tree_update_refcount(&cr_tree, env->sp_stack[env->sp_stack_n].val.cap.rev_node_id, -1);
         pthread_mutex_unlock(&cr_tree_lock);
     }
 }

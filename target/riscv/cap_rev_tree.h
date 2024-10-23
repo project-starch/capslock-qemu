@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <pthread.h>
 
-#define CAP_REV_TREE_SIZE 65536
+#define CAP_REV_TREE_SIZE (65536 * 256)
 #define _CAP_REV_NODE(tree, node_id) ((tree)->node_pool[node_id])
 // #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0 && !_CAP_REV_NODE(tree, node_id).valid)
 #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0)
@@ -28,7 +28,7 @@ struct CapRevTree {
     struct CapRevNode node_pool[CAP_REV_TREE_SIZE];
     uint32_t alloced_n;
     cap_rev_node_id_t free_list;
-    capregval_t *gprs[CAP_REV_MAX_THREADS]; // FIXME: this doesn't work for multi-core
+    capregval_t *gprs[CAP_REV_MAX_THREADS];
 };
 
 typedef struct CapRevTree cap_rev_tree_t;
@@ -87,8 +87,8 @@ inline static void cap_rev_tree_delin(cap_rev_tree_t *tree, cap_rev_node_id_t no
 
 inline static void reg_overwrite(cap_rev_tree_t *tree, capregval_t *v) {
     // if (v->tag) {
-        // fprintf(stderr, "O %u\n", v->val.cap.rev_node_id);
-        // cap_rev_tree_update_refcount(tree, v->val.cap.rev_node_id, -1);
+    //     fprintf(stderr, "O %u\n", v->val.cap.rev_node_id);
+    //     cap_rev_tree_update_refcount(tree, v->val.cap.rev_node_id, -1);
     // }
 }
 

@@ -30,7 +30,6 @@ static inline void clear_entry_at_offset(cap_mem_map_t *cm_map, struct CapMemMap
     unsigned idx = offset >> 6;
     unsigned bidx = offset & 63;
     if ((entry->map[idx] >> bidx) & 1) {
-        // fprintf(stderr, "C %u\n", entry->caps[offset].rev_node_id);
         cap_rev_tree_update_refcount(cm_map->rev_tree, entry->caps[offset].rev_node_id, -1);
     }
     entry->map[idx] &= ~((uint64_t)1 << bidx);
@@ -41,8 +40,9 @@ static inline void set_entry_at_offset(cap_mem_map_t *cm_map, struct CapMemMapEn
     unsigned idx = offset >> 6;
     unsigned bidx = offset & 63;
     clear_entry_at_offset(cm_map, entry, offset);
+    assert(!((entry->map[idx] >> bidx) & 1));
     entry->map[idx] |= (uint64_t)1 << bidx;
-    memcpy(&entry->caps[offset], cap, sizeof(capfat_t));
+    entry->caps[offset] = *cap;
     cap_rev_tree_update_refcount(cm_map->rev_tree, cap->rev_node_id, 1);
 }
 
@@ -51,7 +51,7 @@ static inline bool get_entry_at_offset(struct CapMemMapEntry *entry, unsigned of
     unsigned idx = offset >> 6;
     unsigned bidx = offset & 63;
     if(cap_out) {
-        memcpy(cap_out, &entry->caps[offset], sizeof(capfat_t));
+        *cap_out = entry->caps[offset];
     }
     return ((entry->map[idx] >> bidx) & 1) != 0;
 }

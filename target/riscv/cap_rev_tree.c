@@ -3,36 +3,41 @@
 cap_rev_tree_t cr_tree;
 pthread_mutex_t cr_tree_lock;
 
+extern int cpu_count;
+
 static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
     int n;
+    int reusable_c = 0, free_c = 0, invalid_c = 0, to_release_c = 0;
     for(n = 0; n < CAP_REV_TREE_SIZE; n ++) {
-        cap_rev_node_id_t cur = (cap_rev_node_id_t)n;
-        while (cur != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE_REUSABLE(tree, cur) && !_CAP_REV_NODE(tree, cur).is_free) {
-            cap_rev_node_id_t nxt = _CAP_REV_NODE(tree, cur).next;
-            cap_rev_node_id_t prev = _CAP_REV_NODE(tree, cur).prev;
+        if (_CAP_REV_NODE_REUSABLE(tree, n))
+            ++ reusable_c;
+        if (_CAP_REV_NODE(tree, n).is_free)
+            ++ free_c;
+        if (!_CAP_REV_NODE(tree, n).valid)
+            ++ invalid_c;
+        assert(!_CAP_REV_NODE(tree, n).is_free); // we shouldn't be doing GC if there's a free node
+        if (_CAP_REV_NODE_REUSABLE(tree, n) && !_CAP_REV_NODE(tree, n).valid) {
             bool in_reg = false;
-            int i, n;
-            if(nxt != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, nxt).depth > _CAP_REV_NODE(tree, cur).depth &&
-                prev != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, prev).depth >= _CAP_REV_NODE(tree, cur).depth) {
-                break;
-            }
-            for (n = 0; n < CAP_REV_MAX_THREADS; n ++) {
-                if (!tree->gprs[n])
+            int i, k;
+            for (k = 0; k < cpu_count && !in_reg; k ++) {
+                if (!tree->gprs[k])
                     continue;
                 for (i = 1; i < 32; i ++) {
-                    if (tree->gprs[n][i].tag && tree->gprs[n][i].val.cap.rev_node_id == n) {
+                    if (tree->gprs[k][i].tag && tree->gprs[k][i].val.cap.rev_node_id == n) {
                         in_reg = true;
                         break;
                     }
                 }
             }
-            if(in_reg)
-                break;
-            // move this node to free list
-            cap_rev_tree_release(tree, cur);
-            cur = prev;
+            if(!in_reg) {
+                // move this node to free list
+                ++ to_release_c;
+                cap_rev_tree_release(tree, n);
+            }
         }
     }
+    // fprintf(stderr, "GC: reusable = %d, free = %d, invalid = %d, to release = %d\n",
+    //     reusable_c, free_c, invalid_c, to_release_c);
 }
 
 static cap_rev_node_id_t _cap_rev_tree_alloc_node(cap_rev_tree_t *tree) {
@@ -161,8 +166,17 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool m
 
     if (mutable) {
         // remove the subtree
+        cap_rev_node_id_t le_in = _CAP_REV_NODE(tree, node_id).next;
+
+        if (le_in != CAP_REV_NODE_ID_NULL && le_in != cur) {
+            _CAP_REV_NODE(tree, le_in).prev = CAP_REV_NODE_ID_NULL;
+        }
         _CAP_REV_NODE(tree, node_id).next = cur;
         if(cur != CAP_REV_NODE_ID_NULL) {
+            cap_rev_node_id_t ri_in = _CAP_REV_NODE(tree, cur).prev;
+            if (ri_in != CAP_REV_NODE_ID_NULL && ri_in != node_id) {
+                _CAP_REV_NODE(tree, ri_in).next = CAP_REV_NODE_ID_NULL;
+            }
             _CAP_REV_NODE(tree, cur).prev = node_id;
         }
     }
@@ -172,12 +186,15 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool m
 
 void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
     assert(_CAP_REV_NODE_REUSABLE(tree, node_id));
+    assert(!_CAP_REV_NODE(tree, node_id).is_free);
     cap_rev_node_id_t nxt = _CAP_REV_NODE(tree, node_id).next;
     cap_rev_node_id_t prev = _CAP_REV_NODE(tree, node_id).prev;
     if (prev != CAP_REV_NODE_ID_NULL) {
+        assert(!_CAP_REV_NODE(tree, prev).is_free);
         _CAP_REV_NODE(tree, prev).next = nxt;
     }
     if (nxt != CAP_REV_NODE_ID_NULL) {
+        assert(!_CAP_REV_NODE(tree, nxt).is_free);
         _CAP_REV_NODE(tree, nxt).prev = prev;
     }
     _CAP_REV_NODE(tree, node_id).next = tree->free_list;
