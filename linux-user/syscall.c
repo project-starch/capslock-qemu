@@ -9244,13 +9244,13 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
             // we simply mark the thread as missing
             cr_tree.gprs[RISCV_CPU(cpu)->rev_tree_thread_id] = NULL;
             // destroy all remaining capabilities on stack
-            pthread_mutex_lock(&cr_tree_lock);
             for(int i = 0; i < cpu_env->sp_stack_n; i ++) {
                 if(cpu_env->sp_stack[i].tag) {
+                    pthread_mutex_lock(&cr_tree_lock);
                     cap_rev_tree_update_refcount(&cr_tree, cpu_env->sp_stack[i].val.cap.rev_node_id, -1);
+                    pthread_mutex_unlock(&cr_tree_lock);
                 }
             }
-            pthread_mutex_unlock(&cr_tree_lock);
 #endif
 
             object_unparent(OBJECT(cpu));

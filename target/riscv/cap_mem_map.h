@@ -6,24 +6,15 @@
 #include "cap.h"
 #include "cap_rev_tree.h"
 #include <pthread.h>
+#include <glib.h>
 
-#define CAP_MEM_MAP_ENTRY_N 512
+#define CAP_MEM_MAP_ENTRY_N 65536
 
 typedef uint64_t cap_mem_map_addr_t;
 
 /* Data structure that maintains which memory locations (paddr) */
 
-struct CapMemMapEntry {
-    cap_mem_map_addr_t addr;
-    uint64_t map[8]; // covers 4 * 64 * 16 = 4096 bytes
-    capfat_t caps[8 * 64]; // we hack this to prevent precision loss for now
-};
-
-struct CapMemMap {
-    struct CapMemMapEntry entries[CAP_MEM_MAP_ENTRY_N];
-    int n;
-    cap_rev_tree_t *rev_tree;
-};
+struct CapMemMap;
 
 typedef struct CapMemMap cap_mem_map_t;
 

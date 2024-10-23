@@ -1027,11 +1027,13 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
         pthread_mutex_lock(&cr_tree_lock);
         if (is_store && !cap_rev_tree_check_mutable(&cr_tree, cap->rev_node_id)) {
             CAPSTONE_DEBUG_PRINT("Attempting to use immutable or invalid capability for store!\n");
+            pthread_mutex_unlock(&cr_tree_lock);
             riscv_raise_exception_bp(env, RISCV_EXCP_STORE_AMO_ACCESS_FAULT, GETPC());
         }
 
         if (!is_store && !cap_rev_tree_check_valid(&cr_tree, cap->rev_node_id)) {
             CAPSTONE_DEBUG_PRINT("Attempting to use an invalid capability for load!\n");
+            pthread_mutex_unlock(&cr_tree_lock);
             riscv_raise_exception_bp(env, RISCV_EXCP_LOAD_ACCESS_FAULT, GETPC());
         }
 

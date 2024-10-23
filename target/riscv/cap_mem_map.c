@@ -1,5 +1,6 @@
 #include <string.h>
 #include <assert.h>
+#include <glib.h>
 #include "cap_mem_map.h"
 #include "cap_rev_tree.h"
 #include <stdio.h>
@@ -10,6 +11,11 @@
 cap_mem_map_t cm_map;
 pthread_mutex_t cm_map_lock;
 
+struct CapMemMap {
+    GHashTable *tbl;
+    cap_rev_tree_t *rev_tree;
+};
+
 static inline bool addr_is_aligned(cap_mem_map_addr_t addr) {
     return (addr & (MEM_CAP_SIZE - 1)) == 0;
 }
@@ -18,80 +24,50 @@ static inline cap_mem_map_addr_t addr_round_down(cap_mem_map_addr_t addr) {
     return addr & ~(cap_mem_map_addr_t)(MEM_CAP_SIZE - 1);
 }
 
-static inline cap_mem_map_addr_t addr_get_entry_base(cap_mem_map_addr_t addr) {
-    return addr & ~(cap_mem_map_addr_t)4095;
-}
+#define MEM_CAP_MAP_BUF_N 65536
+static capfat_t entry_buf[MEM_CAP_MAP_BUF_N];
+static capfat_t *entry_free[MEM_CAP_MAP_BUF_N];
+static int entry_free_n;
 
-static inline unsigned addr_get_entry_offset(cap_mem_map_addr_t addr) {
-    return (unsigned)((addr & 4095) >> MEM_CAP_SIZE_LOG);
-}
-
-static inline void clear_entry_at_offset(cap_mem_map_t *cm_map, struct CapMemMapEntry *entry, unsigned offset) {
-    unsigned idx = offset >> 6;
-    unsigned bidx = offset & 63;
-    if ((entry->map[idx] >> bidx) & 1) {
-        cap_rev_tree_update_refcount(cm_map->rev_tree, entry->caps[offset].rev_node_id, -1);
+static inline capfat_t *alloc_entry(void) {
+    if (entry_free_n > 0) {
+        -- entry_free_n;
+        return entry_free[entry_free_n];
+    } else {
+        return (capfat_t*)malloc(sizeof(capfat_t));
     }
-    entry->map[idx] &= ~((uint64_t)1 << bidx);
 }
 
-static inline void set_entry_at_offset(cap_mem_map_t *cm_map, struct CapMemMapEntry *entry, unsigned offset, capfat_t *cap) {
-    assert(offset < 4096 / MEM_CAP_SIZE);
-    unsigned idx = offset >> 6;
-    unsigned bidx = offset & 63;
-    clear_entry_at_offset(cm_map, entry, offset);
-    assert(!((entry->map[idx] >> bidx) & 1));
-    entry->map[idx] |= (uint64_t)1 << bidx;
-    entry->caps[offset] = *cap;
-    cap_rev_tree_update_refcount(cm_map->rev_tree, cap->rev_node_id, 1);
-}
-
-static inline bool get_entry_at_offset(struct CapMemMapEntry *entry, unsigned offset, capfat_t *cap_out) {
-    assert(offset < 4096 / MEM_CAP_SIZE);
-    unsigned idx = offset >> 6;
-    unsigned bidx = offset & 63;
-    if(cap_out) {
-        *cap_out = entry->caps[offset];
+static inline void free_entry(capfat_t *entry) {
+    if (entry >= entry_buf && entry < entry_buf + MEM_CAP_MAP_BUF_N) {
+        assert(entry_free_n < MEM_CAP_MAP_BUF_N);
+        entry_free[entry_free_n ++] = entry;
+    } else {
+        free(entry);
     }
-    return ((entry->map[idx] >> bidx) & 1) != 0;
-}
-
-static struct CapMemMapEntry* find_entry(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
-    cap_mem_map_addr_t base_addr = addr_get_entry_base(addr);
-    int i;
-    int n = cm_map->n;
-    for(i = 0; i < n && cm_map->entries[i].addr != base_addr; i ++);
-    if(i == n) {
-        return NULL;
-    }
-    return &cm_map->entries[i];
-}
-
-static struct CapMemMapEntry* add_entry(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
-    assert(cm_map->n < CAP_MEM_MAP_ENTRY_N);
-    struct CapMemMapEntry *entry = &cm_map->entries[cm_map->n++];
-    memset(entry->map, 0, sizeof(entry->map));
-    entry->addr = addr_get_entry_base(addr);
-    return entry;
 }
 
 void cap_mem_map_add(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, capfat_t *cap) {
     if(addr_is_aligned(addr)) {
-        struct CapMemMapEntry *entry = find_entry(cm_map, addr);
-        if(!entry) {
-            entry = add_entry(cm_map, addr);
+        capfat_t *t = g_hash_table_lookup(cm_map->tbl, (gpointer)addr);
+        if (t) {
+            cap_rev_tree_update_refcount(cm_map->rev_tree, t->rev_node_id, -1);
+        } else {
+            t = alloc_entry();
         }
-        unsigned offset = addr_get_entry_offset(addr);
-        set_entry_at_offset(cm_map, entry, offset, cap);
+        *t = *cap;
+        g_hash_table_insert(cm_map->tbl, (gpointer)addr, t);
+        cap_rev_tree_update_refcount(cm_map->rev_tree, t->rev_node_id, 1);
     }
 }
 
 void cap_mem_map_remove(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
     addr = addr_round_down(addr);
-    struct CapMemMapEntry *entry = find_entry(cm_map, addr);
-    if(entry) {
-        unsigned offset = addr_get_entry_offset(addr);
-        clear_entry_at_offset(cm_map, entry, offset);
+    capfat_t *r = g_hash_table_lookup(cm_map->tbl, (gpointer)addr);
+    if (r) {
+        cap_rev_tree_update_refcount(cm_map->rev_tree, r->rev_node_id, -1);
+        free_entry(r);
+        g_hash_table_remove(cm_map->tbl, (gpointer)addr);
     }
 }
 
@@ -105,23 +81,24 @@ void cap_mem_map_remove_range(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, un
 
 bool cap_mem_map_query(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, capfat_t *cap_out) {
     if(addr_is_aligned(addr)) {
-        struct CapMemMapEntry *entry = find_entry(cm_map, addr);
-        if(entry) {
-            unsigned offset = addr_get_entry_offset(addr);
-            return get_entry_at_offset(entry, offset, cap_out);
-        } else {
-            return false;
+        capfat_t *r = g_hash_table_lookup(cm_map->tbl, (gpointer)addr);
+        if (r) {
+            if (cap_out)
+                *cap_out = *r;
+            return true;
         }
-    } else {
-        return false;
     }
+    return false;
 }
 
 void cap_mem_map_clear(cap_mem_map_t *cm_map) {
-    cm_map->n = 0;
+    g_hash_table_destroy(cm_map->tbl);
 }
 
 void cap_mem_map_init(cap_mem_map_t *cm_map, cap_rev_tree_t *rev_tree) {
-    cm_map->n = 0;
+    for(int i = 0; i < CAP_MEM_MAP_ENTRY_N; i ++)
+        entry_free[i] = entry_buf + i;
+    entry_free_n = CAP_MEM_MAP_ENTRY_N;
+    cm_map->tbl = g_hash_table_new(NULL, NULL);
     cm_map->rev_tree = rev_tree;
 }
