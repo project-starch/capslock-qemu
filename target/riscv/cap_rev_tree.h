@@ -6,7 +6,7 @@
 #include <pthread.h>
 
 #define CAP_REV_TREE_SIZE (65536 * 256)
-#define _CAP_REV_NODE(tree, node_id) ((tree)->node_pool[node_id])
+#define _CAP_REV_NODE(tree, node_id) ((tree)->node_pool[assert(node_id < CAP_REV_TREE_SIZE), node_id])
 // #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0 && !_CAP_REV_NODE(tree, node_id).valid)
 #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0)
 

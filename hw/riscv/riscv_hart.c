@@ -74,9 +74,6 @@ static void riscv_harts_realize(DeviceState *dev, Error **errp)
     }
     cr_tree.free_list = CAP_REV_NODE_ID_NULL;
     cap_mem_map_init(&cm_map, &cr_tree);
-
-    pthread_mutex_init(&cr_tree_lock, NULL);
-    pthread_mutex_init(&cm_map_lock, NULL);
 }
 
 static void riscv_harts_class_init(ObjectClass *klass, void *data)

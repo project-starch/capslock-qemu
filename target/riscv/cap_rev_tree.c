@@ -1,7 +1,7 @@
 #include "cap_rev_tree.h"
 
 cap_rev_tree_t cr_tree;
-pthread_mutex_t cr_tree_lock;
+pthread_mutex_t cr_tree_lock = PTHREAD_MUTEX_INITIALIZER;
 
 extern int cpu_count;
 
@@ -19,7 +19,7 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
         if (_CAP_REV_NODE_REUSABLE(tree, n) && !_CAP_REV_NODE(tree, n).valid) {
             bool in_reg = false;
             int i, k;
-            for (k = 0; k < cpu_count && !in_reg; k ++) {
+            for (k = 0; k < CAP_REV_MAX_THREADS && !in_reg; k ++) {
                 if (!tree->gprs[k])
                     continue;
                 for (i = 1; i < 32; i ++) {

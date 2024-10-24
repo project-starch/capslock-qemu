@@ -1674,8 +1674,6 @@ static void riscv_cpu_set_irq(void *opaque, int irq, int level)
 #endif /* CONFIG_USER_ONLY */
 
 
-int cpu_count;
-
 static void riscv_cpu_init(Object *obj)
 {
     RISCVCPU *cpu = RISCV_CPU(obj);
@@ -1686,17 +1684,12 @@ static void riscv_cpu_init(Object *obj)
     qdev_init_gpio_in(DEVICE(cpu), riscv_cpu_set_irq,
                       IRQ_LOCAL_MAX + IRQ_LOCAL_GUEST_MAX);
 #else
-    cpu->rev_tree_thread_id = cpu_count;
-    cr_tree.gprs[cpu_count ++] = cpu->env.gpr;
-
-    // update the refcount
-    pthread_mutex_lock(&cr_tree_lock);
-    for(int i = 0; i < cpu->env.sp_stack_n; i ++) {
-        if(cpu->env.sp_stack[i].tag) {
-            cap_rev_tree_update_refcount(&cr_tree, cpu->env.sp_stack[i].val.cap.rev_node_id, 1);
-        }
-    }
-    pthread_mutex_unlock(&cr_tree_lock);
+    int thread_id;
+    for(thread_id = 0; thread_id < CAP_REV_MAX_THREADS && cr_tree.gprs[thread_id];
+        thread_id ++);
+    assert(thread_id < CAP_REV_MAX_THREADS);
+    cpu->rev_tree_thread_id = thread_id;
+    cr_tree.gprs[thread_id] = cpu->env.gpr;
 #endif /* CONFIG_USER_ONLY */
 }
 

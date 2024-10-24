@@ -1019,8 +1019,6 @@ int main(int argc, char **argv, char **envp)
 #ifdef TARGET_RISCV
     cr_tree.free_list = CAP_REV_NODE_ID_NULL;
     cap_mem_map_init(&cm_map, &cr_tree);
-    pthread_mutex_init(&cr_tree_lock, NULL);
-    pthread_mutex_init(&cm_map_lock, NULL);
 #endif
 
     cpu_loop(env);

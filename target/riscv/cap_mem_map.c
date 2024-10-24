@@ -9,7 +9,6 @@
 #define MEM_CAP_SIZE_LOG 3
 
 cap_mem_map_t cm_map;
-pthread_mutex_t cm_map_lock;
 
 struct CapMemMap {
     GHashTable *tbl;
