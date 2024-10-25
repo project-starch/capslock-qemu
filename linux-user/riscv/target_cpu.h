@@ -22,6 +22,7 @@ static inline void cpu_clone_regs_parent(CPURISCVState *env, unsigned flags)
 static inline void cpu_set_tls(CPURISCVState *env, target_ulong newtls)
 {
     env->gpr[xTP].val.scalar = newtls;
+    env->gpr[xTP].tag = false;
 }
 
 static inline abi_ulong get_sp_from_cpustate(CPURISCVState *state)

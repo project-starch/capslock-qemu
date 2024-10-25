@@ -1017,12 +1017,12 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
         // fprintf(stderr, "Memacc (%s) with cap %u\n", is_store ? "store" : "load", cap->rev_node_id);
         // CAPSTONE_DEBUG_PRINT("Cap mem access addr = %lx, size = %lu\n", addr, (capaddr_t)size);
         // TODO: bounds check only for now
-        if(!cap_in_bounds(&cap->bounds, addr, (capaddr_t)size)) {
-            CAPSTONE_DEBUG_PRINT("Cap mem access OOB: addr = %lx, size = %lu, bounds = (%lx, %lx) @ pc = %lx\n", addr, (capaddr_t)size,
-                cap->bounds.base, cap->bounds.end, env->pc);
-            RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
-            riscv_raise_exception_bp(env, excp, GETPC());
-        }
+        // if(!cap_in_bounds(&cap->bounds, addr, (capaddr_t)size)) {
+        //     CAPSTONE_DEBUG_PRINT("Cap mem access OOB: addr = %lx, size = %lu, bounds = (%lx, %lx) @ pc = %lx\n", addr, (capaddr_t)size,
+        //         cap->bounds.base, cap->bounds.end, env->pc);
+        //     RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
+        //     riscv_raise_exception_bp(env, excp, GETPC());
+        // }
 
         pthread_mutex_lock(&cr_tree_lock);
         if (is_store && !cap_rev_tree_check_mutable(&cr_tree, cap->rev_node_id)) {
@@ -1290,14 +1290,28 @@ void helper_csdebugcountprint(CPURISCVState *env) {
     }
 }
 
-void helper_move_cap(CPURISCVState *env, uint64_t v, uint32_t rd_v, uint32_t rs1_v) {
+void helper_move_cap(CPURISCVState *env, uint64_t v, uint32_t rd_v, uint32_t rs1_v, uint32_t rs2_v) {
     CAPSTONE_DEBUG_INFO("Cap moved from %u to %u\n", rs1_v, rd_v);
-    pthread_mutex_lock(&cr_tree_lock);
-    reg_overwrite(&cr_tree, &env->gpr[rd_v]);
-    pthread_mutex_unlock(&cr_tree_lock);
-    env->gpr[rd_v].val = env->gpr[rs1_v].val;
+    /* check which is likely to be a valid capability */
+    int from = rs1_v;
+    if (rs1_v == 0 || !env->gpr[rs1_v].tag)
+        from = rs2_v;
+    else if (rs2_v == 0 || !env->gpr[rs2_v].tag)
+        from = rs1_v;
+    // else if (cap_far_oob(&env->gpr[rs1_v].val.cap) &&
+    //         !cap_far_oob(&env->gpr[rs2_v].val.cap))
+    //     from = rs2_v;
+    else
+        from = rs1_v;
+
+    bool t1 = env->gpr[rs1_v].tag, t2 = env->gpr[rs2_v].tag;
+    env->gpr[rd_v].val = env->gpr[from].val;
     env->gpr[rd_v].val.scalar = v;
     env->gpr[rd_v].tag = true;
+    if(t1 && t2)
+        env->gpr[rd_v].tag = false;
+    // if (cap_far_oob(&env->gpr[rd_v].val.cap))
+    //     env->gpr[rd_v].tag = false;
     // fprintf(stderr, "M %u -> %u\n", rs1_v, rd_v);
     // cap_rev_tree_update_refcount(&cr_tree, env->gpr[rs1_v].val.cap.rev_node_id, 1);
 }

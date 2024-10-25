@@ -10,7 +10,7 @@
 // #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0 && !_CAP_REV_NODE(tree, node_id).valid)
 #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0)
 
-#define CAP_REV_MAX_THREADS 64
+#define CAP_REV_MAX_THREADS 128
 
 static const cap_rev_node_id_t CAP_REV_NODE_ID_NULL = -1;
 

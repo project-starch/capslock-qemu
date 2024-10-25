@@ -116,6 +116,15 @@ static inline bool cap_in_bounds(capboundsfat_t* bounds, capaddr_t base, capaddr
     return bounds->base <= base && base + size <= bounds->end;
 }
 
+static inline bool cap_far_oob(capfat_t *cap) {
+    capaddr_t dist = 0;
+    if (cap->bounds.cursor < cap->bounds.base)
+        dist = cap->bounds.base - cap->bounds.cursor;
+    else if(cap->bounds.cursor >= cap->bounds.end)
+        dist = cap->bounds.cursor - cap->bounds.end;
+    return dist > 0x1000;
+}
+
 bool cap_allow_access(capfat_t* cap, capaddr_t base, capaddr_t size, capperms_t access);
 
 static inline bool capreg_allow_access(capregval_t* capreg, capaddr_t base, capaddr_t size, capperms_t access) {

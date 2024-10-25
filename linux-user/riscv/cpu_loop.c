@@ -107,6 +107,7 @@ void target_cpu_copy_regs(CPUArchState *env, struct target_pt_regs *regs)
     env->pc = regs->sepc;
     // helper_csdebuggencap(env, xSP, regs->sp - guest_stack_size, regs->sp);
     env->gpr[xSP].val.scalar = regs->sp;
+    env->gpr[xSP].tag = false;
     // env->gpr[xSP].val.cap.bounds.cursor = regs->sp - 1024;
     env->elf_flags = info->elf_flags;
 

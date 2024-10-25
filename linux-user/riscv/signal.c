@@ -126,6 +126,12 @@ void setup_rt_frame(int sig, struct target_sigaction *ka,
     env->gpr[xA2].val.scalar = frame_addr + offsetof(struct target_rt_sigframe, uc);
     env->gpr[xRA].val.scalar = default_rt_sigreturn;
 
+    env->gpr[xSP].tag = false;
+    env->gpr[xA0].tag = false;
+    env->gpr[xA1].tag = false;
+    env->gpr[xA2].tag = false;
+    env->gpr[xRA].tag = false;
+
     return;
 
 badframe:
