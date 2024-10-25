@@ -92,4 +92,10 @@ inline static void reg_overwrite(cap_rev_tree_t *tree, capregval_t *v) {
     // }
 }
 
+inline static void cap_rev_tree_update_refcount_cap(cap_rev_tree_t *tree, capfat_t *cap, int32_t delta) {
+    for (int i = 0; i < CAP_MAX_PROVENANCE_N; i ++)
+        if (cap->bounds[i].rev_node_id != CAP_REV_NODE_ID_NULL)
+            cap_rev_tree_update_refcount(tree, cap->bounds[i].rev_node_id, delta);
+}
+
 #endif

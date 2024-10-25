@@ -31,7 +31,6 @@
 #include "sysemu/cpu-timers.h"
 #include "cpu_bits.h"
 #include "cap.h"
-#include "cap_compress.h"
 #include "debug.h"
 #include "tcg/oversized-guest.h"
 #include "capstone_defs.h"

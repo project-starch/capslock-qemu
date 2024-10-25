@@ -56,22 +56,24 @@ typedef enum CapAsync capasync_t;
 
 typedef uint8_t reg_idx_t;
 
+#define CAP_MAX_PROVENANCE_N 2
+
 struct CapBoundsFat {
-    capaddr_t cursor;
     capaddr_t base;
     capaddr_t end;
+    cap_rev_node_id_t rev_node_id;
 };
 
 typedef struct CapBoundsFat capboundsfat_t;
 
 // fat capability (used in CPU)
 struct CapFat {
-    capboundsfat_t bounds;
+    uintptr_t cursor;
+    capboundsfat_t bounds[CAP_MAX_PROVENANCE_N];
     capperms_t perms;
     captype_t type;
     capasync_t async;
     reg_idx_t reg;
-    cap_rev_node_id_t rev_node_id;
 };
 
 typedef struct CapFat capfat_t;
@@ -114,15 +116,6 @@ static inline bool cap_perms_allow(capperms_t perms, capperms_t access) {
 
 static inline bool cap_in_bounds(capboundsfat_t* bounds, capaddr_t base, capaddr_t size) {
     return bounds->base <= base && base + size <= bounds->end;
-}
-
-static inline bool cap_far_oob(capfat_t *cap) {
-    capaddr_t dist = 0;
-    if (cap->bounds.cursor < cap->bounds.base)
-        dist = cap->bounds.base - cap->bounds.cursor;
-    else if(cap->bounds.cursor >= cap->bounds.end)
-        dist = cap->bounds.cursor - cap->bounds.end;
-    return dist > 0x1000;
 }
 
 bool cap_allow_access(capfat_t* cap, capaddr_t base, capaddr_t size, capperms_t access);

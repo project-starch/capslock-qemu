@@ -50,13 +50,13 @@ void cap_mem_map_add(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr, capfat_t *c
     if(addr_is_aligned(addr)) {
         capfat_t *t = g_hash_table_lookup(cm_map->tbl, (gpointer)addr);
         if (t) {
-            cap_rev_tree_update_refcount(cm_map->rev_tree, t->rev_node_id, -1);
+            cap_rev_tree_update_refcount_cap(cm_map->rev_tree, t, -1);
         } else {
             t = alloc_entry();
         }
         *t = *cap;
         g_hash_table_insert(cm_map->tbl, (gpointer)addr, t);
-        cap_rev_tree_update_refcount(cm_map->rev_tree, t->rev_node_id, 1);
+        cap_rev_tree_update_refcount_cap(cm_map->rev_tree, t, 1);
     }
 }
 
@@ -64,7 +64,7 @@ void cap_mem_map_remove(cap_mem_map_t *cm_map, cap_mem_map_addr_t addr) {
     addr = addr_round_down(addr);
     capfat_t *r = g_hash_table_lookup(cm_map->tbl, (gpointer)addr);
     if (r) {
-        cap_rev_tree_update_refcount(cm_map->rev_tree, r->rev_node_id, -1);
+        cap_rev_tree_update_refcount_cap(cm_map->rev_tree, r, -1);
         free_entry(r);
         g_hash_table_remove(cm_map->tbl, (gpointer)addr);
     }

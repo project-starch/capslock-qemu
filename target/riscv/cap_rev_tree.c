@@ -18,14 +18,18 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
         assert(!_CAP_REV_NODE(tree, n).is_free); // we shouldn't be doing GC if there's a free node
         if (_CAP_REV_NODE_REUSABLE(tree, n) && !_CAP_REV_NODE(tree, n).valid) {
             bool in_reg = false;
-            int i, k;
+            int i, j, k;
             for (k = 0; k < CAP_REV_MAX_THREADS && !in_reg; k ++) {
                 if (!tree->gprs[k])
                     continue;
-                for (i = 1; i < 32; i ++) {
-                    if (tree->gprs[k][i].tag && tree->gprs[k][i].val.cap.rev_node_id == n) {
-                        in_reg = true;
-                        break;
+                for (i = 1; i < 32 && !in_reg; i ++) {
+                    if (!tree->gprs[k][i].tag)
+                        continue;
+                    for(j = 0; j < CAP_MAX_PROVENANCE_N; j ++) {
+                        if (tree->gprs[k][i].val.cap.bounds[j].rev_node_id == n) {
+                            in_reg = true;
+                            break;
+                        }
                     }
                 }
             }
