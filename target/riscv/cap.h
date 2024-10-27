@@ -56,7 +56,7 @@ typedef enum CapAsync capasync_t;
 
 typedef uint8_t reg_idx_t;
 
-#define CAP_MAX_PROVENANCE_N 2
+#define CAP_MAX_PROVENANCE_N 4
 
 struct CapBoundsFat {
     capaddr_t base;
@@ -147,6 +147,14 @@ static inline bool cap_type_in_mask(capfat_t* cap, captype_mask_t mask) {
     return ((mask >> cap->type) & 1) != 0;
 }
 
+static inline capaddr_t cap_distance(capboundsfat_t *bounds, capaddr_t cursor) {
+    if (cursor < bounds->base)
+        return bounds->base - cursor;
+    if (cursor >= bounds->end)
+        return cursor - bounds->end;
+    return 0;
+}
 
+bool cap_bounds_collapse(capboundsfat_t *bounds, capaddr_t addr, capaddr_t size, bool *is_far_oob);
 
 #endif

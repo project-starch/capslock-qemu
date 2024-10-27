@@ -1,4 +1,5 @@
 #include "cap.h"
+#include "cap_rev_tree.h"
 
 #define MAX_CAPMAP_SIZE 4096
 
@@ -32,3 +33,32 @@ bool cap_allow_access(capfat_t* cap, capaddr_t base, capaddr_t size, capperms_t 
     return cap_in_bounds(&cap->bounds[0], base, size) && cap_perms_allow(cap->perms, access);
 }
 
+bool cap_bounds_collapse(capboundsfat_t *bounds, capaddr_t addr, capaddr_t size, bool *is_far_oob) {
+    bool _is_far_oob = true;
+    int i;
+    for(i = 0; i < CAP_MAX_PROVENANCE_N; i ++) {
+        if (bounds[i].rev_node_id != CAP_REV_NODE_ID_NULL &&
+                cap_in_bounds(&bounds[i], addr, (capaddr_t)size))
+            break;
+        if (bounds[i].rev_node_id != CAP_REV_NODE_ID_NULL && cap_distance(&bounds[i], addr) < 0x10)
+            _is_far_oob = false;
+    }
+    // if(i >= CAP_MAX_PROVENANCE_N && !_is_far_oob) {
+    //     fprintf(stderr, "Oops %lx %lx\n", addr, (capaddr_t)size);
+    //     for(int j = 0; j < CAP_MAX_PROVENANCE_N; j ++) {
+    //         fprintf(stderr, "Bounds: %lx %lx %lx %d %d\n", bounds[j].base, bounds[j].end,
+    //             cap_distance(&bounds[j], addr), bounds[j].rev_node_id != CAP_REV_NODE_ID_NULL,
+    //             cap_in_bounds(&bounds[j], addr, (capaddr_t)size));
+    //     }
+    // }
+    if(i < CAP_MAX_PROVENANCE_N) {
+        bounds[0] = bounds[i];
+        for(int j = 1; j < CAP_MAX_PROVENANCE_N; j ++)
+            bounds[j].rev_node_id = CAP_REV_NODE_ID_NULL;
+    } else
+        for(int j = 0; j < CAP_MAX_PROVENANCE_N; j ++)
+            bounds[j].rev_node_id = CAP_REV_NODE_ID_NULL;
+    if(is_far_oob)
+        *is_far_oob = _is_far_oob;
+    return i < CAP_MAX_PROVENANCE_N;
+}
