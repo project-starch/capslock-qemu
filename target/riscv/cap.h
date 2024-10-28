@@ -155,6 +155,4 @@ static inline capaddr_t cap_distance(capboundsfat_t *bounds, capaddr_t cursor) {
     return 0;
 }
 
-bool cap_bounds_collapse(capboundsfat_t *bounds, capaddr_t addr, capaddr_t size, bool *is_far_oob);
-
 #endif

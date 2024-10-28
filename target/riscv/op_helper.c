@@ -692,7 +692,7 @@ void helper_csrevoke(CPURISCVState *env, uint32_t rs1) {
 
     assert(rs1_v->tag);
 
-    bool bounds_found = cap_bounds_collapse(rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
+    bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
 
     if(bounds_found) {
         pthread_mutex_lock(&cr_tree_lock);
@@ -712,7 +712,7 @@ void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
         return;
     }
 
-    bool bounds_found = cap_bounds_collapse(rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
+    bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
 
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
     if(bounds_found) {
@@ -744,7 +744,7 @@ void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
         return;
     }
 
-    bool bounds_found = cap_bounds_collapse(rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
+    bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
 
     // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
     if(bounds_found) {
@@ -1041,7 +1041,7 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
         // }
 
         bool bounds_found, is_far_oob;
-        bounds_found = cap_bounds_collapse(cap->bounds, addr, (capaddr_t)size, &is_far_oob);
+        bounds_found = cap_bounds_collapse(&cr_tree, cap->bounds, addr, (capaddr_t)size, &is_far_oob);
         if (bounds_found) {
             pthread_mutex_lock(&cr_tree_lock);
             if (is_store && !cap_rev_tree_check_mutable(&cr_tree, cap->bounds[0].rev_node_id)) {
@@ -1284,9 +1284,10 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     pthread_mutex_lock(&cr_tree_lock);
     if(rs1_v->tag) {
         // only printing the bounds for now
-        CAPSTONE_DEBUG_PRINT("Print %u = Cap(%d, %d, 0x%x, 0x%lx, 0x%lx, 0x%lx, %u)\n",
+        CAPSTONE_DEBUG_PRINT("Print %u = Cap(%d, valid = %d, mutable = %d, 0x%x, 0x%lx, 0x%lx, 0x%lx, %u)\n",
                             rs1,
                             cap_rev_tree_check_valid(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id),
+                            cap_rev_tree_check_mutable(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id),
                             rs1_v->val.cap.type,
                             rs1_v->val.cap.perms,
                             rs1_v->val.cap.cursor,

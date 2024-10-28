@@ -205,3 +205,45 @@ void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
     tree->free_list = node_id;
     _CAP_REV_NODE(tree, node_id).is_free = true;
 }
+
+
+bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t addr, capaddr_t size, bool *is_far_oob) {
+    bool _is_far_oob = true;
+    int i;
+    for(i = 0; i < CAP_MAX_PROVENANCE_N; i ++) {
+        if (bounds[i].rev_node_id != CAP_REV_NODE_ID_NULL &&
+                cap_in_bounds(&bounds[i], addr, (capaddr_t)size))
+            break;
+        if (bounds[i].rev_node_id != CAP_REV_NODE_ID_NULL && cap_distance(&bounds[i], addr) < 0x10)
+            _is_far_oob = false;
+    }
+    if(i < CAP_MAX_PROVENANCE_N) {
+        int j;
+        for(j = i; j < CAP_MAX_PROVENANCE_N; j ++) {
+            if (bounds[j].rev_node_id != CAP_REV_NODE_ID_NULL &&
+                cap_in_bounds(&bounds[j], addr, (capaddr_t)size) &&
+                cap_rev_tree_check_valid(tree, bounds[j].rev_node_id))
+                break;
+        }
+        if(j < CAP_MAX_PROVENANCE_N)
+            i = j;
+    }
+    // if(i >= CAP_MAX_PROVENANCE_N && !_is_far_oob) {
+    //     fprintf(stderr, "Oops %lx %lx\n", addr, (capaddr_t)size);
+    //     for(int j = 0; j < CAP_MAX_PROVENANCE_N; j ++) {
+    //         fprintf(stderr, "Bounds: %lx %lx %lx %d %d\n", bounds[j].base, bounds[j].end,
+    //             cap_distance(&bounds[j], addr), bounds[j].rev_node_id != CAP_REV_NODE_ID_NULL,
+    //             cap_in_bounds(&bounds[j], addr, (capaddr_t)size));
+    //     }
+    // }
+    if(i < CAP_MAX_PROVENANCE_N) {
+        bounds[0] = bounds[i];
+        for(int j = 1; j < CAP_MAX_PROVENANCE_N; j ++)
+            bounds[j].rev_node_id = CAP_REV_NODE_ID_NULL;
+    } else
+        for(int j = 0; j < CAP_MAX_PROVENANCE_N; j ++)
+            bounds[j].rev_node_id = CAP_REV_NODE_ID_NULL;
+    if(is_far_oob)
+        *is_far_oob = _is_far_oob;
+    return i < CAP_MAX_PROVENANCE_N;
+}

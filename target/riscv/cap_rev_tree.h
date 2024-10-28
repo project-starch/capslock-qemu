@@ -98,4 +98,6 @@ inline static void cap_rev_tree_update_refcount_cap(cap_rev_tree_t *tree, capfat
             cap_rev_tree_update_refcount(tree, cap->bounds[i].rev_node_id, delta);
 }
 
+bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t addr, capaddr_t size, bool *is_far_oob);
+
 #endif
