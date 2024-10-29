@@ -1017,7 +1017,7 @@ int main(int argc, char **argv, char **envp)
 #endif
 
 #ifdef TARGET_RISCV
-    cr_tree.free_list = CAP_REV_NODE_ID_NULL;
+    cr_tree.free_list = NULL;
     cap_mem_map_init(&cm_map, &cr_tree);
 #endif
 

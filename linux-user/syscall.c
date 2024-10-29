@@ -9247,7 +9247,7 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
             for(int i = 0; i < cpu_env->sp_stack_n; i ++) {
                 if(cpu_env->sp_stack[i].tag) {
                     pthread_mutex_lock(&cr_tree_lock);
-                    cap_rev_tree_update_refcount_cap(&cr_tree, &cpu_env->sp_stack[i].val.cap, -1);
+                    cap_rev_tree_update_refcount_cap(&cpu_env->sp_stack[i].val.cap, -1);
                     pthread_mutex_unlock(&cr_tree_lock);
                 }
             }

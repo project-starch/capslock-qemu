@@ -1,4 +1,5 @@
 #include "cap_rev_tree.h"
+#include "glib.h"
 
 cap_rev_tree_t cr_tree;
 pthread_mutex_t cr_tree_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -9,14 +10,15 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
     int n;
     int reusable_c = 0, free_c = 0, invalid_c = 0, to_release_c = 0;
     for(n = 0; n < CAP_REV_TREE_SIZE; n ++) {
-        if (_CAP_REV_NODE_REUSABLE(tree, n))
+        cap_rev_node_t *node = &tree->node_pool[n];
+        if (_CAP_REV_NODE_REUSABLE(node))
             ++ reusable_c;
-        if (_CAP_REV_NODE(tree, n).is_free)
+        if (node->is_free)
             ++ free_c;
-        if (!_CAP_REV_NODE(tree, n).valid)
+        if (!node->valid)
             ++ invalid_c;
-        assert(!_CAP_REV_NODE(tree, n).is_free); // we shouldn't be doing GC if there's a free node
-        if (_CAP_REV_NODE_REUSABLE(tree, n) && !_CAP_REV_NODE(tree, n).valid) {
+        assert(!node->is_free); // we shouldn't be doing GC if there's a free node
+        if (_CAP_REV_NODE_REUSABLE(node) && !node->valid) {
             bool in_reg = false;
             int i, j, k;
             for (k = 0; k < CAP_REV_MAX_THREADS && !in_reg; k ++) {
@@ -26,7 +28,7 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
                     if (!tree->gprs[k][i].tag)
                         continue;
                     for(j = 0; j < CAP_MAX_PROVENANCE_N; j ++) {
-                        if (tree->gprs[k][i].val.cap.bounds[j].rev_node_id == n) {
+                        if (tree->gprs[k][i].val.cap.bounds[j].rev_node == node) {
                             in_reg = true;
                             break;
                         }
@@ -36,7 +38,7 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
             if(!in_reg) {
                 // move this node to free list
                 ++ to_release_c;
-                cap_rev_tree_release(tree, n);
+                cap_rev_tree_release(tree, node);
             }
         }
     }
@@ -44,187 +46,150 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
     //     reusable_c, free_c, invalid_c, to_release_c);
 }
 
-static cap_rev_node_id_t _cap_rev_tree_alloc_node(cap_rev_tree_t *tree) {
+static cap_rev_node_t *_cap_rev_tree_alloc_node(cap_rev_tree_t *tree) {
     if(tree->alloced_n < CAP_REV_TREE_SIZE) {
-        return tree->alloced_n ++;
+        return &tree->node_pool[tree->alloced_n ++];
     }
     // free list is empty, now try recycling some nodes
-    if(tree->free_list == CAP_REV_NODE_ID_NULL) {
+    if(tree->free_list == NULL) {
         _cap_rev_tree_gc(tree);
     }
-    if(tree->free_list != CAP_REV_NODE_ID_NULL) {
-        cap_rev_node_id_t res = tree->free_list;
-        tree->free_list = _CAP_REV_NODE(tree, res).next;
-        _CAP_REV_NODE(tree, res).is_free = false;
+    if(tree->free_list != NULL) {
+        cap_rev_node_t *res = tree->free_list;
+        tree->free_list = res->sibling;
+        res->is_free = false;
         return res;
     }
 
-    return CAP_REV_NODE_ID_NULL;
+    return NULL;
 }
 
-static cap_rev_node_id_t _cap_rev_tree_dup_node_after(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
-    assert(node_id != CAP_REV_NODE_ID_NULL);
-    // assert(_CAP_REV_NODE(tree, node_id).valid);
 
-    cap_rev_node_id_t new_node = _cap_rev_tree_alloc_node(tree);
-    assert(new_node != CAP_REV_NODE_ID_NULL);
-
-    _CAP_REV_NODE(tree, new_node).depth = _CAP_REV_NODE(tree, node_id).depth;
-    _CAP_REV_NODE(tree, new_node).valid = _CAP_REV_NODE(tree, node_id).valid;
-    _CAP_REV_NODE(tree, new_node).linear = true;
-    _CAP_REV_NODE(tree, new_node).mutable = _CAP_REV_NODE(tree, node_id).mutable;
-    _CAP_REV_NODE(tree, new_node).refcount = 0;
-
-    cap_rev_node_id_t next = _CAP_REV_NODE(tree, node_id).next;
-    _CAP_REV_NODE(tree, new_node).next = next;
-    if(next != CAP_REV_NODE_ID_NULL) {
-        _CAP_REV_NODE(tree, next).prev = new_node;
-    }
-    _CAP_REV_NODE(tree, new_node).prev = node_id;
-    _CAP_REV_NODE(tree, node_id).next = new_node;
-
-    return new_node;
-}
-
-// static cap_rev_node_id_t _cap_rev_tree_dup_node_before(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
-//     assert(node_id != CAP_REV_NODE_ID_NULL);
-//     assert(_CAP_REV_NODE(tree, node_id).valid);
-
-//     cap_rev_node_id_t new_node = _cap_rev_tree_alloc_node(tree);
-//     assert(new_node != CAP_REV_NODE_ID_NULL);
-
-//     _CAP_REV_NODE(tree, new_node).depth = _CAP_REV_NODE(tree, node_id).depth;
-//     _CAP_REV_NODE(tree, new_node).valid = true;
-//     _CAP_REV_NODE(tree, new_node).linear = true;
-//     _CAP_REV_NODE(tree, new_node).refcount = 0;
-
-//     cap_rev_node_id_t prev = _CAP_REV_NODE(tree, node_id).prev;
-//     _CAP_REV_NODE(tree, new_node).prev = prev;
-//     if(prev != CAP_REV_NODE_ID_NULL) {
-//         _CAP_REV_NODE(tree, prev).next = new_node;
-//     }
-//     _CAP_REV_NODE(tree, new_node).next = node_id;
-//     _CAP_REV_NODE(tree, node_id).prev = new_node;
-
-//     return new_node;
-// }
-
-cap_rev_node_id_t cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable) {
-    cap_rev_node_id_t node = _cap_rev_tree_alloc_node(tree);
-    _CAP_REV_NODE(tree, node).depth = 0;
-    _CAP_REV_NODE(tree, node).refcount = 0;
-    _CAP_REV_NODE(tree, node).prev = CAP_REV_NODE_ID_NULL;
-    _CAP_REV_NODE(tree, node).next = CAP_REV_NODE_ID_NULL;
-    _CAP_REV_NODE(tree, node).mutable = mutable;
-    _CAP_REV_NODE(tree, node).valid = true;
-    _CAP_REV_NODE(tree, node).linear = true;
+cap_rev_node_t *cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable) {
+    cap_rev_node_t *node = _cap_rev_tree_alloc_node(tree);
+    node->refcount = 0;
+    node->parent = NULL;
+    node->sibling = NULL;
+    node->child = NULL;
+    node->mutable = mutable;
+    node->valid = true;
     return node;
 }
 
-void cap_rev_tree_init(cap_rev_tree_t *tree,
-    cap_rev_node_id_t *pc_node, cap_rev_node_id_t *cap0_node, cap_rev_node_id_t *cap1_node)
-{
-    tree->alloced_n = 0;
-
-    *pc_node = cap_rev_tree_create_lone_node(tree, true);
-    *cap0_node = cap_rev_tree_create_lone_node(tree, true);
-    *cap1_node = cap_rev_tree_create_lone_node(tree, true);
-}
-
-
-cap_rev_node_id_t cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool mutable) {
+cap_rev_node_t *cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_t *node, bool mutable,
+        uintptr_t base, uintptr_t end) {
     // FIXME: see whether this is desirable
     // if (mutable && !_CAP_REV_NODE(tree, node_id).mutable)
     //     return CAP_REV_NODE_ID_NULL;
-    cap_rev_node_id_t new_node = _cap_rev_tree_dup_node_after(tree, node_id);
-    _CAP_REV_NODE(tree, new_node).depth ++;
-    _CAP_REV_NODE(tree, new_node).mutable = mutable;
+    cap_rev_node_t *new_node = _cap_rev_tree_alloc_node(tree);
+    assert(new_node && "Failed to allocate a new node for borrow!");
+    // TODO: do something for borrow?
+    new_node->range.base = base;
+    new_node->range.end = end;
+    new_node->mutable = mutable;
+
+    // connects the new node
+    new_node->parent = node;
+    new_node->is_free = false;
+    new_node->refcount = 0;
+    new_node->child = NULL;
+    new_node->sibling = node->child;
+    new_node->valid = true;
+    node->child = new_node;
+
     return new_node;
 }
 
-cap_rev_node_id_t cap_rev_tree_split(cap_rev_tree_t *tree, cap_rev_node_id_t *node_id) {
-    cap_rev_node_id_t node_a = _cap_rev_tree_dup_node_after(tree, *node_id);
-    cap_rev_node_id_t node_b = _cap_rev_tree_dup_node_after(tree, *node_id);
+void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_t *node) {
+    assert(_CAP_REV_NODE_REUSABLE(node));
+    assert(!node->is_free);
+    assert(!node->valid);
 
-    _CAP_REV_NODE(tree, node_a).depth ++;
-    _CAP_REV_NODE(tree, node_b).depth ++;
-    *node_id = node_a;
-
-    return node_b;
+    node->sibling = tree->free_list;
+    tree->free_list = node;
+    node->is_free = true;
 }
 
-bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool mutable) {
-    assert(node_id != CAP_REV_NODE_ID_NULL);
-    uint32_t depth = _CAP_REV_NODE(tree, node_id).depth;
-    cap_rev_node_id_t cur;
-    bool retain_data = true;
-    for(cur = _CAP_REV_NODE(tree, node_id).next;
-        cur != CAP_REV_NODE_ID_NULL && _CAP_REV_NODE(tree, cur).depth > depth;
-        cur = _CAP_REV_NODE(tree, cur).next)
-    {
-        retain_data = retain_data && !_CAP_REV_NODE(tree, cur).linear;
-        if (mutable) {
-            // fprintf(stderr, "Revoked mut %u due to %u\n", cur, node_id);
-            _CAP_REV_NODE(tree, cur).valid = false;
-        } else
-            _CAP_REV_NODE(tree, cur).mutable = false;
-    }
 
-    if (mutable) {
-        // remove the subtree
-        cap_rev_node_id_t le_in = _CAP_REV_NODE(tree, node_id).next;
-
-        if (le_in != CAP_REV_NODE_ID_NULL && le_in != cur) {
-            _CAP_REV_NODE(tree, le_in).prev = CAP_REV_NODE_ID_NULL;
-        }
-        _CAP_REV_NODE(tree, node_id).next = cur;
-        if(cur != CAP_REV_NODE_ID_NULL) {
-            cap_rev_node_id_t ri_in = _CAP_REV_NODE(tree, cur).prev;
-            if (ri_in != CAP_REV_NODE_ID_NULL && ri_in != node_id) {
-                _CAP_REV_NODE(tree, ri_in).next = CAP_REV_NODE_ID_NULL;
-            }
-            _CAP_REV_NODE(tree, cur).prev = node_id;
+// subtree_root itself excluded
+static void _invalidate_subtree(cap_rev_tree_t *tree, cap_rev_node_t *subtree_root) {
+    static GQueue stack = G_QUEUE_INIT;
+    g_queue_push_head(&stack, subtree_root);
+    while (!g_queue_is_empty(&stack)) {
+        cap_rev_node_t *cur = (cap_rev_node_t*)g_queue_pop_head(&stack);
+        assert(cur);
+        for (cap_rev_node_t *child = cur->child; child != NULL; child = child->sibling) {
+            cap_rev_tree_invalidate(child);
+            g_queue_push_head(&stack, child);
         }
     }
-
-    return retain_data;
 }
 
-void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
-    assert(_CAP_REV_NODE_REUSABLE(tree, node_id));
-    assert(!_CAP_REV_NODE(tree, node_id).is_free);
-    cap_rev_node_id_t nxt = _CAP_REV_NODE(tree, node_id).next;
-    cap_rev_node_id_t prev = _CAP_REV_NODE(tree, node_id).prev;
-    if (prev != CAP_REV_NODE_ID_NULL) {
-        assert(!_CAP_REV_NODE(tree, prev).is_free);
-        _CAP_REV_NODE(tree, prev).next = nxt;
-    }
-    if (nxt != CAP_REV_NODE_ID_NULL) {
-        assert(!_CAP_REV_NODE(tree, nxt).is_free);
-        _CAP_REV_NODE(tree, nxt).prev = prev;
-    }
-    _CAP_REV_NODE(tree, node_id).next = tree->free_list;
-    tree->free_list = node_id;
-    _CAP_REV_NODE(tree, node_id).is_free = true;
+static inline bool range_overlaps(cap_rev_node_range_t *a, cap_rev_node_range_t *b) {
+    return !(a->end <= b->base || b->end <= a->base);
 }
 
+// subtree_root itself and the subtree at except are excluded
+static void _invalidate_subtree_overlap(cap_rev_tree_t *tree, cap_rev_node_t *subtree_root,
+    cap_rev_node_t *except, cap_rev_node_range_t *range) {
+
+    cap_rev_node_t *new_child = NULL, *nxt;
+    for(cap_rev_node_t *child = subtree_root->child; child != NULL; child = nxt) {
+        nxt = child->sibling;
+        if (child != except && range_overlaps(range, &child->range)) {
+            // remove this child and invalidate all nodes inside
+            cap_rev_tree_invalidate(child);
+            _invalidate_subtree(tree, child);
+        } else {
+            // keep this child
+            child->sibling = new_child;
+            new_child = child;
+        }
+    }
+    subtree_root->child = new_child;
+}
+
+// invalidate whole subtree including the root
+bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node) {
+    if (!node->valid)
+        return false;
+    cap_rev_tree_invalidate(node);
+    _invalidate_subtree(tree, node);
+
+    return true;
+}
+
+bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, bool is_write) {
+    if (!node->valid || (is_write && !node->mutable))
+        return false;
+    if (is_write) {
+        // invalidate all aliasing nodes that are not parents
+        _invalidate_subtree(tree, node);
+        for(cap_rev_node_t *cur = node; cur->parent != NULL; cur = cur->parent) {
+            _invalidate_subtree_overlap(tree, cur->parent, cur, &node->range);
+        }
+    }
+    // no need to do anything for read
+
+    return true;
+}
 
 bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t addr, capaddr_t size, bool *is_far_oob) {
     bool _is_far_oob = true;
     int i;
     for(i = 0; i < CAP_MAX_PROVENANCE_N; i ++) {
-        if (bounds[i].rev_node_id != CAP_REV_NODE_ID_NULL &&
+        if (bounds[i].rev_node != NULL &&
                 cap_in_bounds(&bounds[i], addr, (capaddr_t)size))
             break;
-        if (bounds[i].rev_node_id != CAP_REV_NODE_ID_NULL && cap_distance(&bounds[i], addr) < 0x10)
+        if (bounds[i].rev_node != NULL && cap_distance(&bounds[i], addr) < 0x10)
             _is_far_oob = false;
     }
     if(i < CAP_MAX_PROVENANCE_N) {
         int j;
         for(j = i; j < CAP_MAX_PROVENANCE_N; j ++) {
-            if (bounds[j].rev_node_id != CAP_REV_NODE_ID_NULL &&
+            if (bounds[j].rev_node != NULL &&
                 cap_in_bounds(&bounds[j], addr, (capaddr_t)size) &&
-                cap_rev_tree_check_valid(tree, bounds[j].rev_node_id))
+                cap_rev_tree_check_valid(bounds[j].rev_node))
                 break;
         }
         if(j < CAP_MAX_PROVENANCE_N)
@@ -234,17 +199,17 @@ bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t
     //     fprintf(stderr, "Oops %lx %lx\n", addr, (capaddr_t)size);
     //     for(int j = 0; j < CAP_MAX_PROVENANCE_N; j ++) {
     //         fprintf(stderr, "Bounds: %lx %lx %lx %d %d\n", bounds[j].base, bounds[j].end,
-    //             cap_distance(&bounds[j], addr), bounds[j].rev_node_id != CAP_REV_NODE_ID_NULL,
+    //             cap_distance(&bounds[j], addr), bounds[j].rev_node != NULL,
     //             cap_in_bounds(&bounds[j], addr, (capaddr_t)size));
     //     }
     // }
     if(i < CAP_MAX_PROVENANCE_N) {
         bounds[0] = bounds[i];
         for(int j = 1; j < CAP_MAX_PROVENANCE_N; j ++)
-            bounds[j].rev_node_id = CAP_REV_NODE_ID_NULL;
+            bounds[j].rev_node = NULL;
     } else if (_is_far_oob)
         for(int j = 0; j < CAP_MAX_PROVENANCE_N; j ++)
-            bounds[j].rev_node_id = CAP_REV_NODE_ID_NULL;
+            bounds[j].rev_node = NULL;
     if(is_far_oob)
         *is_far_oob = _is_far_oob;
     return i < CAP_MAX_PROVENANCE_N;

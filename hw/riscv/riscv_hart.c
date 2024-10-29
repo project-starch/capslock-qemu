@@ -72,7 +72,7 @@ static void riscv_harts_realize(DeviceState *dev, Error **errp)
     for (n = 0; n < s->num_harts; n++) {
         cr_tree.gprs[n] = s->harts[n].env.gpr;
     }
-    cr_tree.free_list = CAP_REV_NODE_ID_NULL;
+    cr_tree.free_list = NULL;
     cap_mem_map_init(&cm_map, &cr_tree);
 }
 

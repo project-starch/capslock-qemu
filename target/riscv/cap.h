@@ -8,7 +8,6 @@
 #define CAPSTONE_CPMP_COUNT 16
 
 typedef uint64_t capaddr_t;
-typedef uint32_t cap_rev_node_id_t;
 
 enum CapPerms {
     CAP_PERMS_NA        = 0x0,
@@ -58,10 +57,12 @@ typedef uint8_t reg_idx_t;
 
 #define CAP_MAX_PROVENANCE_N 4
 
+struct CapRevNode;
+
 struct CapBoundsFat {
     capaddr_t base;
     capaddr_t end;
-    cap_rev_node_id_t rev_node_id;
+    struct CapRevNode *rev_node;
 };
 
 typedef struct CapBoundsFat capboundsfat_t;
