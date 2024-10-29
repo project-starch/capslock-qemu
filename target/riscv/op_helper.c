@@ -727,7 +727,7 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
         uintptr_t base = rs1_v->val.scalar;
         uintptr_t end = rs1_v->val.scalar + rs2_v->val.scalar;
 
-        // assert(base >= rs1_v->val.cap.bounds[0].base && end <= rs1_v->val.cap.bounds[0].end);
+        assert(base >= rs1_v->val.cap.bounds[0].base && end <= rs1_v->val.cap.bounds[0].end);
 
         // fprintf(stderr, "Borrowing %lx %lx <- %lx %lx @ %lx\n", base, end, rs1_v->val.cap.bounds[0].base, rs1_v->val.cap.bounds[0].end,
         //     env->pc);
@@ -737,8 +737,8 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
         }
         rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, true,
             base, end);
-        // rd_v->val.cap.bounds[0].base = base;
-        // rd_v->val.cap.bounds[0].end = end;
+        rd_v->val.cap.bounds[0].base = base;
+        rd_v->val.cap.bounds[0].end = end;
         pthread_mutex_unlock(&cr_tree_lock);
     } else {
         rs1_v -> tag = false;

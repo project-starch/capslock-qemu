@@ -78,12 +78,8 @@ cap_rev_node_t *cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable
 
 cap_rev_node_t *cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_t *node, bool mutable,
         uintptr_t base, uintptr_t end) {
-    // FIXME: see whether this is desirable
-    // if (mutable && !_CAP_REV_NODE(tree, node_id).mutable)
-    //     return CAP_REV_NODE_ID_NULL;
     cap_rev_node_t *new_node = _cap_rev_tree_alloc_node(tree);
     assert(new_node && "Failed to allocate a new node for borrow!");
-    // TODO: do something for borrow?
     new_node->range.base = base;
     new_node->range.end = end;
     new_node->mutable = mutable;
