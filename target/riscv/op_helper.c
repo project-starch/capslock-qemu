@@ -701,11 +701,12 @@ void helper_csrevoke(CPURISCVState *env, uint32_t rs1) {
     }
 }
 
-void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
 
-    CAPSTONE_DEBUG_INFO("Borrow %u <- %u\n", rd, rs1);
+    // for borrowing, we merely make sure there's no mutable capabilities from now on
+    // regardless of whether this is a mutable or immutable borrow
 
     if (!rs1_v->tag) {
         *rd_v = *rs1_v;
@@ -714,42 +715,11 @@ void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
 
     bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
 
-    // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
+    // FIXME: not handling interior mutability correctly
     if(bounds_found) {
         pthread_mutex_lock(&cr_tree_lock);
-        cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, false);
-
-        reg_overwrite(&cr_tree, rd_v);
-        if(rs1 != rd) {
-            *rd_v = *rs1_v;
-        }
-
-        rd_v->val.cap.bounds[0].rev_node_id = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, false);
-        pthread_mutex_unlock(&cr_tree_lock);
-    } else {
-        rs1_v -> tag = false;
-        *rd_v = *rs1_v;
-    }
-}
-
-
-void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
-
-    CAPSTONE_DEBUG_INFO("Borrowmut %u <- %u\n", rd, rs1);
-
-    if (!rs1_v->tag) {
-        *rd_v = *rs1_v;
-        return;
-    }
-
-    bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
-
-    // assert(rs1_v->val.cap.type == CAP_TYPE_LIN);
-    if(bounds_found) {
-        pthread_mutex_lock(&cr_tree_lock);
-        cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, true);
+        // cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, false);
+        // no revocation is needed now, delayed to access time
 
         reg_overwrite(&cr_tree, rd_v);
         if(rs1 != rd) {
@@ -762,6 +732,66 @@ void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
         rs1_v -> tag = false;
         *rd_v = *rs1_v;
     }
+}
+
+void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+    CAPSTONE_DEBUG_INFO("Borrow %u <- %u\n", rd, rs1);
+    borrow_impl(env, rd, rs1);
+
+    // if (!rs1_v->tag) {
+    //     *rd_v = *rs1_v;
+    //     return;
+    // }
+
+    // bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
+
+    // if(bounds_found) {
+    //     pthread_mutex_lock(&cr_tree_lock);
+    //     cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, false);
+
+    //     reg_overwrite(&cr_tree, rd_v);
+    //     if(rs1 != rd) {
+    //         *rd_v = *rs1_v;
+    //     }
+
+    //     rd_v->val.cap.bounds[0].rev_node_id = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, false);
+    //     pthread_mutex_unlock(&cr_tree_lock);
+    // } else {
+    //     rs1_v -> tag = false;
+    //     *rd_v = *rs1_v;
+    // }
+}
+
+
+void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+    // capregval_t *rd_v = &env->gpr[rd];
+    // capregval_t *rs1_v = &env->gpr[rs1];
+
+    CAPSTONE_DEBUG_INFO("Borrowmut %u <- %u\n", rd, rs1);
+    borrow_impl(env, rd, rs1);
+
+    // if (!rs1_v->tag) {
+    //     *rd_v = *rs1_v;
+    //     return;
+    // }
+
+    // bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
+
+    // if(bounds_found) {
+    //     pthread_mutex_lock(&cr_tree_lock);
+    //     cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, true);
+
+    //     reg_overwrite(&cr_tree, rd_v);
+    //     if(rs1 != rd) {
+    //         *rd_v = *rs1_v;
+    //     }
+
+    //     rd_v->val.cap.bounds[0].rev_node_id = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, true);
+    //     pthread_mutex_unlock(&cr_tree_lock);
+    // } else {
+    //     rs1_v -> tag = false;
+    //     *rd_v = *rs1_v;
+    // }
 }
 
 
@@ -887,8 +917,8 @@ void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
             cap_rev_tree_invalidate(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id);
         } else {
             // FIXME: add a separate one with checks for heap double free
-            // CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability!\n");
-            // riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
+            CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability!\n");
+            riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
         }
         pthread_mutex_unlock(&cr_tree_lock);
     }
@@ -1045,22 +1075,31 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
         if (bounds_found) {
             pthread_mutex_lock(&cr_tree_lock);
             if (is_store && !cap_rev_tree_check_mutable(&cr_tree, cap->bounds[0].rev_node_id)) {
-                CAPSTONE_DEBUG_PRINT("Attempting to use immutable or invalid capability for store!\n");
+                CAPSTONE_DEBUG_PRINT("Attempting to use immutable or invalid capability for store (address = %lx, size = %x, node id = %u) @ pc = %lx!\n",
+                    addr, size,
+                    cap->bounds[0].rev_node_id,
+                    env->pc);
                 pthread_mutex_unlock(&cr_tree_lock);
                 riscv_raise_exception_bp(env, RISCV_EXCP_STORE_AMO_ACCESS_FAULT, GETPC());
             }
 
             if (!is_store && !cap_rev_tree_check_valid(&cr_tree, cap->bounds[0].rev_node_id)) {
-                CAPSTONE_DEBUG_PRINT("Attempting to use an invalid capability for load!\n");
+                CAPSTONE_DEBUG_PRINT("Attempting to use an invalid capability for load (address = %lx, size = %x, node id = %u) @ pc = %lx!\n",
+                    addr, size,
+                    cap->bounds[0].rev_node_id,
+                    env->pc);
                 pthread_mutex_unlock(&cr_tree_lock);
                 riscv_raise_exception_bp(env, RISCV_EXCP_LOAD_ACCESS_FAULT, GETPC());
             }
 
-            cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, is_store);
+            if (is_store) {
+                // fprintf(stderr, "Revoke %u due to write to %lx %x\n", rs1_v->val.cap.bounds[0].rev_node_id, addr, size);
+                cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id, true);
+            }
             pthread_mutex_unlock(&cr_tree_lock);
         } else if (!is_far_oob) {
             // If too far OOB, we don't consider it a violation (potentially bad provenance tracking)
-            CAPSTONE_DEBUG_PRINT("Capability access OOB %lx\n", addr);
+            CAPSTONE_DEBUG_PRINT("Capability access OOB %lx @ pc = %lx\n", addr, env->pc);
             RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
             riscv_raise_exception_bp(env, excp, GETPC());
         } else {
@@ -1284,6 +1323,7 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     pthread_mutex_lock(&cr_tree_lock);
     if(rs1_v->tag) {
         // only printing the bounds for now
+        assert(rs1_v->val.cap.bounds[0].rev_node_id != CAP_REV_NODE_ID_NULL);
         CAPSTONE_DEBUG_PRINT("Print %u = Cap(%d, valid = %d, mutable = %d, 0x%x, 0x%lx, 0x%lx, 0x%lx, %u)\n",
                             rs1,
                             cap_rev_tree_check_valid(&cr_tree, rs1_v->val.cap.bounds[0].rev_node_id),

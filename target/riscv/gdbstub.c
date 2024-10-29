@@ -47,6 +47,7 @@ static const struct TypeSize vec_lanes[] = {
     { "uint8", "bytes", 8, 'b' },
 };
 
+void helper_csdebugprint(CPURISCVState*, uint32_t);
 int riscv_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
 {
     RISCVCPU *cpu = RISCV_CPU(cs);
@@ -54,6 +55,7 @@ int riscv_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
     target_ulong tmp;
 
     if (n < 32) {
+        helper_csdebugprint(env, n);
         tmp = env->gpr[n].val.scalar;
     } else if (n == 32) {
         tmp = env->pc;

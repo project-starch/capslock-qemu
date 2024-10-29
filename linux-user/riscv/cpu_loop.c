@@ -89,9 +89,12 @@ void cpu_loop(CPURISCVState *env)
             env->pc += 4;
             break;
         default:
-            EXCP_DUMP(env, "\nqemu: unhandled CPU exception %#x - aborting\n",
-                     trapnr);
-            exit(EXIT_FAILURE);
+            // force_sig_fault(TARGET_SIGSEGV, TARGET_SEGV_MAPERR, env->pc);
+            force_sig_fault(TARGET_SIGTRAP, TARGET_TRAP_BRKPT, env->pc);
+            // EXCP_DUMP(env, "\nqemu: unhandled CPU exception %#x - aborting\n",
+            //          trapnr);
+            // exit(EXIT_FAILURE);
+            break;
         }
 
         process_pending_signals(env);

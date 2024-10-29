@@ -66,6 +66,7 @@ inline static bool cap_rev_tree_check_mutable(cap_rev_tree_t *tree, cap_rev_node
 
 inline static void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_id_t node_id) {
     assert(node_id < tree->alloced_n);
+    // fprintf(stderr, "Invaliding %u\n", node_id);
     _CAP_REV_NODE(tree, node_id).valid = false;
 }
 

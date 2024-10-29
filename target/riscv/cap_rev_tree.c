@@ -133,8 +133,9 @@ void cap_rev_tree_init(cap_rev_tree_t *tree,
 
 
 cap_rev_node_id_t cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool mutable) {
-    if (mutable && !_CAP_REV_NODE(tree, node_id).mutable)
-        return CAP_REV_NODE_ID_NULL;
+    // FIXME: see whether this is desirable
+    // if (mutable && !_CAP_REV_NODE(tree, node_id).mutable)
+    //     return CAP_REV_NODE_ID_NULL;
     cap_rev_node_id_t new_node = _cap_rev_tree_dup_node_after(tree, node_id);
     _CAP_REV_NODE(tree, new_node).depth ++;
     _CAP_REV_NODE(tree, new_node).mutable = mutable;
@@ -162,9 +163,10 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_id_t node_id, bool m
         cur = _CAP_REV_NODE(tree, cur).next)
     {
         retain_data = retain_data && !_CAP_REV_NODE(tree, cur).linear;
-        if (mutable)
+        if (mutable) {
+            // fprintf(stderr, "Revoked mut %u due to %u\n", cur, node_id);
             _CAP_REV_NODE(tree, cur).valid = false;
-        else
+        } else
             _CAP_REV_NODE(tree, cur).mutable = false;
     }
 
@@ -240,7 +242,7 @@ bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t
         bounds[0] = bounds[i];
         for(int j = 1; j < CAP_MAX_PROVENANCE_N; j ++)
             bounds[j].rev_node_id = CAP_REV_NODE_ID_NULL;
-    } else
+    } else if (_is_far_oob)
         for(int j = 0; j < CAP_MAX_PROVENANCE_N; j ++)
             bounds[j].rev_node_id = CAP_REV_NODE_ID_NULL;
     if(is_far_oob)
