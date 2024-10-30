@@ -116,7 +116,14 @@ static inline bool cap_perms_allow(capperms_t perms, capperms_t access) {
 }
 
 static inline bool cap_in_bounds(capboundsfat_t* bounds, capaddr_t base, capaddr_t size) {
-    return bounds->base <= base && base + size <= bounds->end;
+    capaddr_t bounds_base = bounds->base;
+    capaddr_t bounds_end = bounds->end;
+    if(size == 8 && (base & 7) == 0) {
+        // aligned access of 8 bytes, handle specially to appease strlen
+        bounds_base &= ~((capaddr_t)7);
+        bounds_end = (bounds_end + 7) & ~((capaddr_t)7);
+    }
+    return bounds_base <= base && base + size <= bounds_end;
 }
 
 bool cap_allow_access(capfat_t* cap, capaddr_t base, capaddr_t size, capperms_t access);

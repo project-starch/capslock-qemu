@@ -703,13 +703,13 @@ void helper_csrevoke(CPURISCVState *env, uint32_t rs1) {
 
     assert(rs1_v->tag);
 
+    pthread_mutex_lock(&cr_tree_lock);
     bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
 
     if(bounds_found) {
-        pthread_mutex_lock(&cr_tree_lock);
         cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node);
-        pthread_mutex_unlock(&cr_tree_lock);
     }
+    pthread_mutex_unlock(&cr_tree_lock);
 }
 
 static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
@@ -725,11 +725,11 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
         return;
     }
 
+    pthread_mutex_lock(&cr_tree_lock);
     bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
 
     // FIXME: not handling interior mutability correctly
     if(bounds_found) {
-        pthread_mutex_lock(&cr_tree_lock);
         // cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, false);
         // no revocation is needed now, delayed to access time
 
@@ -758,11 +758,11 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
             base, end, false);
         rd_v->val.cap.bounds[0].base = base;
         rd_v->val.cap.bounds[0].end = end;
-        pthread_mutex_unlock(&cr_tree_lock);
     } else {
         rs1_v -> tag = false;
         *rd_v = *rs1_v;
     }
+    pthread_mutex_unlock(&cr_tree_lock);
 }
 
 void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
@@ -997,9 +997,9 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
         // }
 
         bool bounds_found, is_far_oob;
+        pthread_mutex_lock(&cr_tree_lock);
         bounds_found = cap_bounds_collapse(&cr_tree, cap->bounds, addr, (capaddr_t)size, &is_far_oob);
         if (bounds_found) {
-            pthread_mutex_lock(&cr_tree_lock);
             if (is_store && !cap_rev_tree_check_mutable(cap->bounds[0].rev_node)) {
                 CAPSTONE_DEBUG_PRINT("Attempting to use immutable or invalid capability for store (address = %lx, size = %x, node = %p) @ pc = %lx!\n",
                     addr, size,
@@ -1019,15 +1019,22 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
             }
 
             assert(cap_rev_tree_access(&cr_tree, cap->bounds[0].rev_node, is_store));
-            pthread_mutex_unlock(&cr_tree_lock);
         } else if (!is_far_oob) {
             // If too far OOB, we don't consider it a violation (potentially bad provenance tracking)
-            CAPSTONE_DEBUG_PRINT("Capability access OOB %lx @ pc = %lx\n", addr, env->pc);
+            CAPSTONE_DEBUG_PRINT("Capability access OOB %lx size = %x @ pc = %lx\n", addr, size, env->pc);
+            for (int i = 0; i < CAP_MAX_PROVENANCE_N; i ++) {
+                if (cap_rev_tree_check_valid(cap->bounds[i].rev_node)) {
+                    CAPSTONE_DEBUG_PRINT("Bounds %d: %lx -- %lx\n", i, cap->bounds[i].base, cap->bounds[i].end);
+                }
+            }
+
+            pthread_mutex_unlock(&cr_tree_lock);
             RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
             riscv_raise_exception_bp(env, excp, GETPC());
         } else {
             env->gpr[rs1].tag = false;
         }
+        pthread_mutex_unlock(&cr_tree_lock);
     }
     // else {
     //     CAPSTONE_DEBUG_PRINT("Cap mem access requires capability\n");

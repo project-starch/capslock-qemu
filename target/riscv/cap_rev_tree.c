@@ -90,6 +90,33 @@ void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node) {
     g_hash_table_insert(tree->unsafe_cell_subtrees, (gpointer)base, (gpointer)node);
 }
 
+void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node) {
+    assert(node != NULL);
+    // fprintf(stderr, "Invaliding %u\n", node_id);
+    node->valid = false;
+
+    if (node->is_unsafecell) {
+        // remove from unsafecell list
+        cap_rev_node_t *prev = node->unsafecell_prev, *next = node->unsafecell_next;
+        if(prev) {
+            prev->unsafecell_next = next;
+        } else {
+            // new head
+            if(next != NULL) {
+                g_hash_table_insert(tree->unsafe_cell_subtrees, (gpointer)node->range.base, (gpointer)next);
+            } else {
+                // empty now
+                g_hash_table_remove(tree->unsafe_cell_subtrees, (gconstpointer)node->range.base);
+            }
+        }
+        if(next) {
+            next->unsafecell_prev = prev;
+        }
+    }
+}
+
+
+
 cap_rev_node_t *cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_t *node, bool mutable,
         uintptr_t base, uintptr_t end, bool is_unsafecell) {
     assert(node->valid && "Borrowing must be performed on a valid capability!");
@@ -135,6 +162,8 @@ static void _invalidate_subtree(cap_rev_tree_t *tree, cap_rev_node_t *subtree_ro
         cap_rev_node_t *cur = (cap_rev_node_t*)g_queue_pop_head(&stack);
         assert(cur);
         for (cap_rev_node_t *child = cur->child; child != NULL; child = child->sibling) {
+            if(!child->valid)
+                continue;
             cap_rev_tree_invalidate(tree, child);
             g_queue_push_head(&stack, child);
         }
@@ -152,6 +181,8 @@ static void _invalidate_subtree_overlap(cap_rev_tree_t *tree, cap_rev_node_t *su
     cap_rev_node_t *new_child = NULL, *nxt;
     for(cap_rev_node_t *child = subtree_root->child; child != NULL; child = nxt) {
         nxt = child->sibling;
+        if(!child->valid)
+            continue;
         if (child != except && range_overlaps(range, &child->range)) {
             // remove this child and invalidate all nodes inside
             cap_rev_tree_invalidate(tree, child);

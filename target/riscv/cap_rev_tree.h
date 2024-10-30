@@ -60,40 +60,19 @@ void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node);
 void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_t *node);
 
 inline static bool cap_rev_tree_check_valid(cap_rev_node_t *node) {
-    assert(node != NULL);
+    if(node == NULL)
+        return false;
     return node->valid;
 }
 
 inline static bool cap_rev_tree_check_mutable(cap_rev_node_t *node) {
-    assert(node != NULL);
+    if(node == NULL)
+        return false;
     return node->valid && node->mutable;
 }
 
 
-inline static void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node) {
-    assert(node != NULL);
-    // fprintf(stderr, "Invaliding %u\n", node_id);
-    node->valid = false;
-
-    if (node->is_unsafecell) {
-        // remove from unsafecell list
-        cap_rev_node_t *prev = node->unsafecell_prev, *next = node->unsafecell_next;
-        if(prev) {
-            prev->unsafecell_next = next;
-        } else {
-            // new head
-            if(next != NULL) {
-                g_hash_table_insert(tree->unsafe_cell_subtrees, (gpointer)node->range.base, (gpointer)next);
-            } else {
-                // empty now
-                g_hash_table_remove(tree->unsafe_cell_subtrees, (gconstpointer)node->range.base);
-            }
-        }
-        if(next) {
-            next->unsafecell_prev = prev;
-        }
-    }
-}
+void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node);
 
 inline static void cap_rev_tree_update_refcount(cap_rev_node_t *node, int32_t delta) {
     // fprintf(stderr, "R %u %d\n", node_id, delta);
