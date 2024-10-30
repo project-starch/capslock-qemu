@@ -874,6 +874,7 @@ void helper_cssavesp(CPURISCVState *env, uint32_t rs1) {
 
 void helper_csloadsp(CPURISCVState *env, uint32_t rd) {
     assert(env->sp_stack_n > 0);
+    // fprintf(stderr, "Pop\n");
     -- env->sp_stack_n;
     env->gpr[rd] = env->sp_stack[env->sp_stack_n];
     if (env->sp_stack[env->sp_stack_n].tag) {
@@ -884,6 +885,12 @@ void helper_csloadsp(CPURISCVState *env, uint32_t rd) {
 }
 
 void helper_csgetsp(CPURISCVState *env, uint32_t rd, uint64_t idx) {
+    // pop the top of the stack below the current sp.
+    // this is to support longjmp-like operations e.g., panic
+    uintptr_t sp = env->gpr[2].val.scalar;
+    while (env->sp_stack_n > 0 && env->sp_stack[env->sp_stack_n - 1].val.scalar < sp)
+        helper_csloadsp(env, 0);
+
     assert(env->sp_stack_n > idx);
     capregval_t *sp_v = &env->sp_stack[env->sp_stack_n - 1 - idx];
     // fprintf(stderr, "Get %u <- %lu = %lx %lx\n", rd, idx, sp_v->val.cap.bounds[0].base, sp_v->val.cap.bounds[0].end);
