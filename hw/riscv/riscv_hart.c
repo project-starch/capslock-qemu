@@ -73,6 +73,7 @@ static void riscv_harts_realize(DeviceState *dev, Error **errp)
         cr_tree.gprs[n] = s->harts[n].env.gpr;
     }
     cr_tree.free_list = NULL;
+    cr_tree.unsafe_cell_subtrees = g_hash_table_new(NULL, NULL);
     cap_mem_map_init(&cm_map, &cr_tree);
 }
 

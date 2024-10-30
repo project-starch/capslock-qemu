@@ -44,6 +44,16 @@ void helper_raise_exception(CPURISCVState *env, uint32_t exception)
     riscv_raise_exception(env, exception, 0);
 }
 
+// #define CAPSTONE_EXCP_IS_BREAKPOINT
+
+inline static void riscv_raise_exception_bp(CPURISCVState *env, RISCVException excp, uintptr_t pc) {
+    #ifdef CAPSTONE_EXCP_IS_BREAKPOINT
+        riscv_raise_exception(env, RISCV_EXCP_BREAKPOINT, pc);
+    #else
+        riscv_raise_exception(env, excp, pc);
+    #endif
+}
+
 target_ulong helper_csrr(CPURISCVState *env, int csr)
 {
     /*
@@ -639,9 +649,10 @@ void helper_cslcc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t imm) {
     capregval_t *rs1_v = &env->gpr[rs1];
 
     bool check_passed = true;
-    if (imm != 8) {
+    // we allow 2 (cursor) to be queried for scalar values too
+    if (imm != 8 && imm != 2) {
         check_passed = check_passed && rs1_v->tag;
-        check_passed = check_passed && (imm != 2 || rs1_v->val.cap.type != CAP_TYPE_SEALED);
+        // check_passed = check_passed && (imm != 2 || rs1_v->val.cap.type != CAP_TYPE_SEALED);
         check_passed = check_passed && (imm != 4 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
         check_passed = check_passed && (imm != 5 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
         check_passed = check_passed && (imm != 6 || rs1_v->val.cap.type == CAP_TYPE_SEALED || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
@@ -722,6 +733,14 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
         // cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, false);
         // no revocation is needed now, delayed to access time
 
+        if(!cap_rev_tree_check_valid(rs1_v->val.cap.bounds[0].rev_node)) {
+            CAPSTONE_DEBUG_PRINT("Attempting to borrow from an invalid capability (node = %p) @ pc = %lx!\n",
+                rs1_v->val.cap.bounds[0].rev_node,
+                env->pc);
+            pthread_mutex_unlock(&cr_tree_lock);
+            riscv_raise_exception_bp(env, RISCV_EXCP_INVALID_CAP, GETPC());
+        }
+
         reg_overwrite(&cr_tree, rd_v);
 
         uintptr_t base = rs1_v->val.scalar;
@@ -736,7 +755,7 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
             *rd_v = *rs1_v;
         }
         rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, true,
-            base, end);
+            base, end, false);
         rd_v->val.cap.bounds[0].base = base;
         rd_v->val.cap.bounds[0].end = end;
         pthread_mutex_unlock(&cr_tree_lock);
@@ -749,63 +768,21 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
 void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
     CAPSTONE_DEBUG_INFO("Borrow %u <- %u\n", rd, rs1);
     borrow_impl(env, rd, rs1, rs2);
-
-    // if (!rs1_v->tag) {
-    //     *rd_v = *rs1_v;
-    //     return;
-    // }
-
-    // bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
-
-    // if(bounds_found) {
-    //     pthread_mutex_lock(&cr_tree_lock);
-    //     cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, false);
-
-    //     reg_overwrite(&cr_tree, rd_v);
-    //     if(rs1 != rd) {
-    //         *rd_v = *rs1_v;
-    //     }
-
-    //     rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, false);
-    //     pthread_mutex_unlock(&cr_tree_lock);
-    // } else {
-    //     rs1_v -> tag = false;
-    //     *rd_v = *rs1_v;
-    // }
 }
 
 
 void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
-    // capregval_t *rd_v = &env->gpr[rd];
-    // capregval_t *rs1_v = &env->gpr[rs1];
-
     CAPSTONE_DEBUG_INFO("Borrowmut %u <- %u\n", rd, rs1);
     borrow_impl(env, rd, rs1, rs2);
-
-    // if (!rs1_v->tag) {
-    //     *rd_v = *rs1_v;
-    //     return;
-    // }
-
-    // bool bounds_found = cap_bounds_collapse(&cr_tree, rs1_v->val.cap.bounds, rs1_v->val.cap.cursor, 1, NULL);
-
-    // if(bounds_found) {
-    //     pthread_mutex_lock(&cr_tree_lock);
-    //     cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, true);
-
-    //     reg_overwrite(&cr_tree, rd_v);
-    //     if(rs1 != rd) {
-    //         *rd_v = *rs1_v;
-    //     }
-
-    //     rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, true);
-    //     pthread_mutex_unlock(&cr_tree_lock);
-    // } else {
-    //     rs1_v -> tag = false;
-    //     *rd_v = *rs1_v;
-    // }
 }
 
+void helper_csmarkunsafecell(CPURISCVState *env, uint32_t rs1) {
+    capregval_t *rs1_v = &env->gpr[rs1];
+    if(rs1_v->tag) {
+        assert(cap_rev_tree_check_valid(rs1_v->val.cap.bounds[0].rev_node));
+        cap_rev_tree_mark_unsafecell(&cr_tree, rs1_v->val.cap.bounds[0].rev_node);
+    }
+}
 
 void helper_csshrink(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
     capregval_t *rd_v = &env->gpr[rd];
@@ -872,7 +849,7 @@ void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
         pthread_mutex_lock(&cr_tree_lock);
         if (cap_rev_tree_check_valid(rs1_v->val.cap.bounds[0].rev_node)) {
             cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node);
-            cap_rev_tree_invalidate(rs1_v->val.cap.bounds[0].rev_node);
+            cap_rev_tree_invalidate(&cr_tree, rs1_v->val.cap.bounds[0].rev_node);
         } else {
             // FIXME: add a separate one with checks for heap double free
             CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability!\n");
@@ -998,15 +975,6 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
 
 #define CAPSTONE_IMM12_SEXT(x) ((x) | (((-((x) >> 11)) << 12)))
 
-// #define CAPSTONE_EXCP_IS_BREAKPOINT
-
-inline static void riscv_raise_exception_bp(CPURISCVState *env, RISCVException excp, uintptr_t pc) {
-    #ifdef CAPSTONE_EXCP_IS_BREAKPOINT
-        riscv_raise_exception(env, RISCV_EXCP_BREAKPOINT, pc);
-    #else
-        riscv_raise_exception(env, excp, pc);
-    #endif
-}
 
 static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint32_t rs2, uint32_t memop, bool is_store) {
     // CAPSTONE_DEBUG_PRINT("Cap mem access %u %lx\n", rs1, imm);

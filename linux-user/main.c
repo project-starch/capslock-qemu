@@ -1018,6 +1018,7 @@ int main(int argc, char **argv, char **envp)
 
 #ifdef TARGET_RISCV
     cr_tree.free_list = NULL;
+    cr_tree.unsafe_cell_subtrees = g_hash_table_new(NULL, NULL);
     cap_mem_map_init(&cm_map, &cr_tree);
 #endif
 

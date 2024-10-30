@@ -62,6 +62,12 @@ static bool trans_csborrowmut(DisasContext *ctx, arg_csborrowmut *a) {
     return true;
 }
 
+static bool trans_csmarkunsafecell(DisasContext *ctx, arg_csmarkunsafecell *a) {
+    TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
+    gen_helper_csmarkunsafecell(cpu_env, rs1);
+    return true;
+}
+
 static bool trans_csshrink(DisasContext *ctx, arg_csshrink *a) {
     TCGv_i32 rd = tcg_constant_i32(a->rd);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);

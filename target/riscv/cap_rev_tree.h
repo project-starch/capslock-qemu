@@ -4,6 +4,7 @@
 #include "cap.h"
 #include <stdio.h>
 #include <pthread.h>
+#include <glib.h>
 
 #define CAP_REV_TREE_SIZE (65536 * 256)
 // #define _CAP_REV_NODE_REUSABLE(tree, node_id) (_CAP_REV_NODE(tree, node_id).refcount == 0 && !_CAP_REV_NODE(tree, node_id).valid)
@@ -21,8 +22,10 @@ struct CapRevNode {
     bool is_free;
     bool mutable;
     bool valid;
+    bool is_unsafecell; /* does this node correspond to an UnsafeCell? */
     cap_rev_node_range_t range;
     uint32_t refcount; /* how many associated capabilities */
+    struct CapRevNode *unsafecell_prev, *unsafecell_next;
 };
 
 typedef struct CapRevNode cap_rev_node_t;
@@ -32,6 +35,7 @@ struct CapRevTree {
     uint32_t alloced_n;
     cap_rev_node_t *free_list;
     capregval_t *gprs[CAP_REV_MAX_THREADS];
+    GHashTable *unsafe_cell_subtrees; /* addr -> node */
 };
 
 typedef struct CapRevTree cap_rev_tree_t;
@@ -40,7 +44,8 @@ extern cap_rev_tree_t cr_tree;
 extern pthread_mutex_t cr_tree_lock;
 
 /* returns the node id for the new revocation capability */
-cap_rev_node_t *cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_t *node, bool mutable, uintptr_t base, uintptr_t end);
+cap_rev_node_t *cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_t *node, bool mutable,
+    uintptr_t base, uintptr_t end, bool is_unsafecell);
 
 /** access through the given node, returns whether the access should be allowed */
 bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, bool is_write);
@@ -49,6 +54,8 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node);
 
 /* creates a new tree with a new node as its root */
 cap_rev_node_t *cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable);
+
+void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node);
 
 void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_t *node);
 
@@ -63,10 +70,29 @@ inline static bool cap_rev_tree_check_mutable(cap_rev_node_t *node) {
 }
 
 
-inline static void cap_rev_tree_invalidate(cap_rev_node_t *node) {
+inline static void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node) {
     assert(node != NULL);
     // fprintf(stderr, "Invaliding %u\n", node_id);
     node->valid = false;
+
+    if (node->is_unsafecell) {
+        // remove from unsafecell list
+        cap_rev_node_t *prev = node->unsafecell_prev, *next = node->unsafecell_next;
+        if(prev) {
+            prev->unsafecell_next = next;
+        } else {
+            // new head
+            if(next != NULL) {
+                g_hash_table_insert(tree->unsafe_cell_subtrees, (gpointer)node->range.base, (gpointer)next);
+            } else {
+                // empty now
+                g_hash_table_remove(tree->unsafe_cell_subtrees, (gconstpointer)node->range.base);
+            }
+        }
+        if(next) {
+            next->unsafecell_prev = prev;
+        }
+    }
 }
 
 inline static void cap_rev_tree_update_refcount(cap_rev_node_t *node, int32_t delta) {
