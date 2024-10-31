@@ -703,7 +703,7 @@ static void drop_impl(CPURISCVState *env, capregval_t *rv) {
         pthread_mutex_lock(&cr_tree_lock);
         bool is_far_oob;
         bool found = cap_bounds_collapse(&cr_tree, rv->val.cap.bounds, rv->val.scalar, 1, &is_far_oob);
-        if (found) {
+        if (found && cap_rev_tree_check_valid(rv->val.cap.bounds[0].rev_node)) {
             // find the root of the tree which is the owner of the allocation
             cap_rev_node_t *root;
             for(root = rv->val.cap.bounds[0].rev_node; root->parent != NULL; root = root->parent);
@@ -719,6 +719,7 @@ static void drop_impl(CPURISCVState *env, capregval_t *rv) {
 }
 
 void helper_csrevoke(CPURISCVState *env, uint32_t rs1) {
+    assert(false && "Not supposed to be used");
     capregval_t *rs1_v = &env->gpr[rs1];
 
     assert(rs1_v->tag);
@@ -799,8 +800,10 @@ void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
 void helper_csmarkunsafecell(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
     if(rs1_v->tag) {
-        assert(cap_rev_tree_check_valid(rs1_v->val.cap.bounds[0].rev_node));
-        cap_rev_tree_mark_unsafecell(&cr_tree, rs1_v->val.cap.bounds[0].rev_node);
+        pthread_mutex_lock(&cr_tree_lock);
+        if(cap_rev_tree_check_valid(rs1_v->val.cap.bounds[0].rev_node))
+            cap_rev_tree_mark_unsafecell(&cr_tree, rs1_v->val.cap.bounds[0].rev_node);
+        pthread_mutex_unlock(&cr_tree_lock);
     }
 }
 
