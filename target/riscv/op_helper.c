@@ -899,12 +899,16 @@ void helper_csloadsp(CPURISCVState *env, uint32_t rd) {
 void helper_csgetsp(CPURISCVState *env, uint32_t rd, uint64_t idx) {
     // pop the top of the stack below the current sp.
     // this is to support longjmp-like operations e.g., panic
+    idx &= 0xfff;
     uintptr_t sp = env->gpr[2].val.scalar;
     while (env->sp_stack_n > 0 && env->sp_stack[env->sp_stack_n - 1].val.scalar < sp) {
         drop_impl(env, &env->sp_stack[env->sp_stack_n - 1]);
         helper_csloadsp(env, 0);
     }
 
+    if(env->sp_stack_n <= idx) {
+        fprintf(stderr, "Bad stack getsp: %d %lu @ %lx\n", env->sp_stack_n, idx, env->pc);
+    }
     assert(env->sp_stack_n > idx);
     capregval_t *sp_v = &env->sp_stack[env->sp_stack_n - 1 - idx];
     // fprintf(stderr, "Get %u <- %lu = %lx %lx\n", rd, idx, sp_v->val.cap.bounds[0].base, sp_v->val.cap.bounds[0].end);
