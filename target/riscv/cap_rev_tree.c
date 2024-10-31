@@ -93,6 +93,9 @@ void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node) {
 void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node) {
     assert(node != NULL);
     // fprintf(stderr, "Invaliding %u\n", node_id);
+    if(!node->valid)
+        return;
+
     node->valid = false;
 
     if (node->is_unsafecell) {

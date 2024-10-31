@@ -100,4 +100,10 @@ inline static void cap_rev_tree_update_refcount_cap(capfat_t *cap, int32_t delta
 
 bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t addr, capaddr_t size, bool *is_far_oob);
 
+inline static void cap_bounds_clear(capfat_t *cap) {
+    for(int i = 0; i < CAP_REV_MAX_THREADS; i ++)
+        cap->bounds[i].rev_node = NULL;
+}
+
+
 #endif

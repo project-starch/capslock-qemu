@@ -698,6 +698,26 @@ void helper_cslcc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t imm) {
     }
 }
 
+static void drop_impl(CPURISCVState *env, capregval_t *rv) {
+    if (rv->tag) {
+        pthread_mutex_lock(&cr_tree_lock);
+        bool is_far_oob;
+        bool found = cap_bounds_collapse(&cr_tree, rv->val.cap.bounds, rv->val.scalar, 1, &is_far_oob);
+        if (found) {
+            // find the root of the tree which is the owner of the allocation
+            cap_rev_node_t *root;
+            for(root = rv->val.cap.bounds[0].rev_node; root->parent != NULL; root = root->parent);
+            cap_rev_tree_revoke(&cr_tree, root);
+        } else if (!is_far_oob) {
+            // FIXME: add a separate one with checks for heap double free
+            CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability!\n");
+            riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
+        } else
+            rv->tag = false;
+        pthread_mutex_unlock(&cr_tree_lock);
+    }
+}
+
 void helper_csrevoke(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
 
@@ -845,18 +865,7 @@ void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
 
     // check if the the capability is itself valid
-    if (rs1_v->tag) {
-        pthread_mutex_lock(&cr_tree_lock);
-        if (cap_rev_tree_check_valid(rs1_v->val.cap.bounds[0].rev_node)) {
-            cap_rev_tree_revoke(&cr_tree, rs1_v->val.cap.bounds[0].rev_node);
-            cap_rev_tree_invalidate(&cr_tree, rs1_v->val.cap.bounds[0].rev_node);
-        } else {
-            // FIXME: add a separate one with checks for heap double free
-            CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability!\n");
-            riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
-        }
-        pthread_mutex_unlock(&cr_tree_lock);
-    }
+    drop_impl(env, rs1_v);
 }
 
 
@@ -867,7 +876,7 @@ void helper_cssavesp(CPURISCVState *env, uint32_t rs1) {
     // fprintf(stderr, "Push %lx %lx\n", env->gpr[rs1].val.cap.bounds[0].base, env->gpr[rs1].val.cap.bounds[0].end);
     if (env->gpr[rs1].tag) {
         pthread_mutex_lock(&cr_tree_lock);
-        cap_rev_tree_update_refcount(env->gpr[rs1].val.cap.bounds[0].rev_node, 1);
+        cap_rev_tree_update_refcount_cap(&env->gpr[rs1].val.cap, 1);
         pthread_mutex_unlock(&cr_tree_lock);
     }
 }
@@ -879,7 +888,7 @@ void helper_csloadsp(CPURISCVState *env, uint32_t rd) {
     env->gpr[rd] = env->sp_stack[env->sp_stack_n];
     if (env->sp_stack[env->sp_stack_n].tag) {
         pthread_mutex_lock(&cr_tree_lock);
-        cap_rev_tree_update_refcount(env->sp_stack[env->sp_stack_n].val.cap.bounds[0].rev_node, -1);
+        cap_rev_tree_update_refcount_cap(&env->sp_stack[env->sp_stack_n].val.cap, -1);
         pthread_mutex_unlock(&cr_tree_lock);
     }
 }
@@ -888,8 +897,10 @@ void helper_csgetsp(CPURISCVState *env, uint32_t rd, uint64_t idx) {
     // pop the top of the stack below the current sp.
     // this is to support longjmp-like operations e.g., panic
     uintptr_t sp = env->gpr[2].val.scalar;
-    while (env->sp_stack_n > 0 && env->sp_stack[env->sp_stack_n - 1].val.scalar < sp)
+    while (env->sp_stack_n > 0 && env->sp_stack[env->sp_stack_n - 1].val.scalar < sp) {
+        drop_impl(env, &env->sp_stack[env->sp_stack_n - 1]);
         helper_csloadsp(env, 0);
+    }
 
     assert(env->sp_stack_n > idx);
     capregval_t *sp_v = &env->sp_stack[env->sp_stack_n - 1 - idx];
@@ -1233,6 +1244,7 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
     capregval_t *rd_v = &env->gpr[rd];
     reg_overwrite(&cr_tree, rd_v);
     capfat_t *cap = &rd_v->val.cap;
+    cap_bounds_clear(cap);
     cap->bounds[0].base = rs1_v;
     cap->bounds[0].end = rs2_v;
     cap->cursor = rs1_v;
