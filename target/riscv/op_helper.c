@@ -1000,6 +1000,14 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
 
 #define CAPSTONE_IMM12_SEXT(x) ((x) | (((-((x) >> 11)) << 12)))
 
+inline static void print_bounds(capfat_t *cap) {
+    for (int i = 0; i < CAP_MAX_PROVENANCE_N; i ++) {
+        if (cap->bounds[i].rev_node != NULL) {
+            CAPSTONE_DEBUG_PRINT("Bounds %d: %lx -- %lx (valid = %d)\n", i, cap->bounds[i].base, cap->bounds[i].end,
+                cap_rev_tree_check_valid(cap->bounds[i].rev_node));
+        }
+    }
+}
 
 static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint32_t rs2, uint32_t memop, bool is_store) {
     // CAPSTONE_DEBUG_PRINT("Cap mem access %u %lx\n", rs1, imm);
@@ -1030,6 +1038,7 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
                     addr, size,
                     cap->bounds[0].rev_node,
                     env->pc);
+                print_bounds(cap);
                 pthread_mutex_unlock(&cr_tree_lock);
                 riscv_raise_exception_bp(env, RISCV_EXCP_STORE_AMO_ACCESS_FAULT, GETPC());
             }
@@ -1039,6 +1048,7 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
                     addr, size,
                     cap->bounds[0].rev_node,
                     env->pc);
+                print_bounds(cap);
                 pthread_mutex_unlock(&cr_tree_lock);
                 riscv_raise_exception_bp(env, RISCV_EXCP_LOAD_ACCESS_FAULT, GETPC());
             }
@@ -1047,11 +1057,7 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
         } else if (!is_far_oob) {
             // If too far OOB, we don't consider it a violation (potentially bad provenance tracking)
             CAPSTONE_DEBUG_PRINT("Capability access OOB %lx size = %x @ pc = %lx\n", addr, size, env->pc);
-            for (int i = 0; i < CAP_MAX_PROVENANCE_N; i ++) {
-                if (cap_rev_tree_check_valid(cap->bounds[i].rev_node)) {
-                    CAPSTONE_DEBUG_PRINT("Bounds %d: %lx -- %lx\n", i, cap->bounds[i].base, cap->bounds[i].end);
-                }
-            }
+            print_bounds(cap);
 
             pthread_mutex_unlock(&cr_tree_lock);
             RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
@@ -1315,9 +1321,7 @@ void helper_csdebugcountprint(CPURISCVState *env) {
     }
 }
 
-inline static void insert_bounds(capboundsfat_t *dst, capboundsfat_t *src, int *cnt) {
-    if (*cnt >= CAP_MAX_PROVENANCE_N)
-        return;
+inline static void insert_bounds(capboundsfat_t *dst, capboundsfat_t *src, int *cnt, capaddr_t addr) {
     for(int j = 0; j < CAP_MAX_PROVENANCE_N && src[j].rev_node != NULL;
             j ++) {
         int k;
@@ -1325,6 +1329,12 @@ inline static void insert_bounds(capboundsfat_t *dst, capboundsfat_t *src, int *
         if(*cnt < CAP_MAX_PROVENANCE_N && k == *cnt) {
             dst[*cnt] = src[j];
             *cnt = *cnt + 1;
+        } else if(k == *cnt && !cap_is_far_oob(&src[j], addr)) {
+            int h;
+            for(h = 0; h < CAP_MAX_PROVENANCE_N && !cap_is_far_oob(&dst[h], addr); h ++);
+            // full but we want to force this one in
+            if(h < CAP_MAX_PROVENANCE_N)
+                dst[h] = src[j];
         }
     }
 }
@@ -1338,11 +1348,11 @@ void helper_move_cap(CPURISCVState *env, uint64_t v, uint32_t rd_v, uint32_t rs1
     int cnt = 0;
     if (rs1_v != 0 && env->gpr[rs1_v].tag) {
         capfat_t *cap1 = &env->gpr[rs1_v].val.cap;
-        insert_bounds(t_bounds, cap1->bounds, &cnt);
+        insert_bounds(t_bounds, cap1->bounds, &cnt, v);
     }
     if (rs2_v != 0 && env->gpr[rs2_v].tag) {
         capfat_t *cap2 = &env->gpr[rs2_v].val.cap;
-        insert_bounds(t_bounds, cap2->bounds, &cnt);
+        insert_bounds(t_bounds, cap2->bounds, &cnt, v);
     }
     env->gpr[rd_v].val.cap.perms = CAP_PERMS_RWX;
     memcpy(env->gpr[rd_v].val.cap.bounds, t_bounds, sizeof(t_bounds));

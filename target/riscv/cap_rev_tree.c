@@ -243,7 +243,7 @@ bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t
         if (bounds[i].rev_node != NULL &&
                 cap_in_bounds(&bounds[i], addr, (capaddr_t)size))
             break;
-        if (bounds[i].rev_node != NULL && cap_distance(&bounds[i], addr) < 0x10)
+        if (bounds[i].rev_node != NULL && !cap_is_far_oob(&bounds[i], addr))
             _is_far_oob = false;
     }
     if(i < CAP_MAX_PROVENANCE_N) {

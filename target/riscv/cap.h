@@ -163,4 +163,8 @@ static inline capaddr_t cap_distance(capboundsfat_t *bounds, capaddr_t cursor) {
     return 0;
 }
 
+static inline bool cap_is_far_oob(capboundsfat_t *bounds, capaddr_t cursor) {
+    return cap_distance(bounds, cursor) >= 0x10;
+}
+
 #endif
