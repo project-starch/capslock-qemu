@@ -698,15 +698,33 @@ void helper_cslcc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t imm) {
     }
 }
 
-static void drop_impl(CPURISCVState *env, capregval_t *rv) {
+static void drop_impl(CPURISCVState *env, capregval_t *rv, bool is_stack) {
+    // fprintf(stderr, "Dropping %lx\n", rv->val.scalar);
     if (rv->tag) {
         pthread_mutex_lock(&cr_tree_lock);
         bool is_far_oob;
         bool found = cap_bounds_collapse(&cr_tree, rv->val.cap.bounds, rv->val.scalar, 1, &is_far_oob);
+        // if (found) {
+        //     fprintf(stderr, "Found ");
+        //     if (cap_rev_tree_check_valid(rv->val.cap.bounds[0].rev_node)) {
+        //         fprintf(stderr, "Valid %d\n", is_far_oob);
+        //     } else {
+        //         fprintf(stderr, "Invalid %d\n", is_far_oob);
+        //     }
+        // }
+        // fprintf(stderr, "Dropping\n");
         if (found && cap_rev_tree_check_valid(rv->val.cap.bounds[0].rev_node)) {
             // find the root of the tree which is the owner of the allocation
             cap_rev_node_t *root;
             for(root = rv->val.cap.bounds[0].rev_node; root->parent != NULL; root = root->parent);
+            // if (!is_stack) {
+            //     if (root->range.base != rv->val.scalar) {
+            //         CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability (invalid address) %lx %lx!\n",
+            //             root->range.base,
+            //             rv->val.scalar);
+            //         riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
+            //     }
+            // }
             cap_rev_tree_revoke(&cr_tree, root);
         } else if (!is_far_oob) {
             // FIXME: add a separate one with checks for heap double free
@@ -733,7 +751,7 @@ void helper_csrevoke(CPURISCVState *env, uint32_t rs1) {
     pthread_mutex_unlock(&cr_tree_lock);
 }
 
-static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2, bool mutable) {
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
     capregval_t *rs2_v = &env->gpr[rs2]; // length
@@ -765,7 +783,14 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
         reg_overwrite(&cr_tree, rd_v);
 
         uintptr_t base = rs1_v->val.scalar;
-        uintptr_t end = rs1_v->val.scalar + rs2_v->val.scalar;
+        uintptr_t end;
+        if (rs2_v->val.scalar == 0) {
+            // foreign type, we don't know anything about it
+            // just inherit
+            end = rs1_v->val.cap.bounds[0].end;
+        } else {
+            end = rs1_v->val.scalar + rs2_v->val.scalar;
+        }
 
         assert(base >= rs1_v->val.cap.bounds[0].base && end <= rs1_v->val.cap.bounds[0].end);
 
@@ -774,6 +799,12 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
 
         if(rs1 != rd) {
             *rd_v = *rs1_v;
+        }
+        if(mutable) {
+            cap_rev_node_range_t range;
+            range.base = base;
+            range.end = end;
+            cap_rev_tree_access(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, &range, true);
         }
         rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, true,
             base, end, false);
@@ -788,13 +819,13 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
 
 void helper_csborrow(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
     CAPSTONE_DEBUG_INFO("Borrow %u <- %u\n", rd, rs1);
-    borrow_impl(env, rd, rs1, rs2);
+    borrow_impl(env, rd, rs1, rs2, false);
 }
 
 
 void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
     CAPSTONE_DEBUG_INFO("Borrowmut %u <- %u\n", rd, rs1);
-    borrow_impl(env, rd, rs1, rs2);
+    borrow_impl(env, rd, rs1, rs2, true);
 }
 
 void helper_csmarkunsafecell(CPURISCVState *env, uint32_t rs1) {
@@ -867,8 +898,7 @@ void helper_csdrop(CPURISCVState *env, uint32_t rs1) {
     CAPSTONE_DEBUG_INFO("Dropping capability in %u\n", rs1);
     capregval_t *rs1_v = &env->gpr[rs1];
 
-    // check if the the capability is itself valid
-    drop_impl(env, rs1_v);
+    drop_impl(env, rs1_v, false);
 }
 
 
@@ -907,7 +937,7 @@ void helper_csgetsp(CPURISCVState *env, uint32_t rd, uint64_t idx) {
     }
     uintptr_t sp = env->gpr[2].val.scalar;
     while (env->sp_stack_n > 0 && env->sp_stack[env->sp_stack_n - 1].val.scalar < sp) {
-        drop_impl(env, &env->sp_stack[env->sp_stack_n - 1]);
+        drop_impl(env, &env->sp_stack[env->sp_stack_n - 1], true);
         helper_csloadsp(env, 0);
     }
 
@@ -1008,8 +1038,12 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
 inline static void print_bounds(capfat_t *cap) {
     for (int i = 0; i < CAP_MAX_PROVENANCE_N; i ++) {
         if (cap->bounds[i].rev_node != NULL) {
-            CAPSTONE_DEBUG_PRINT("Bounds %d: %lx -- %lx (valid = %d)\n", i, cap->bounds[i].base, cap->bounds[i].end,
-                cap_rev_tree_check_valid(cap->bounds[i].rev_node));
+            CAPSTONE_DEBUG_PRINT("Bounds %d: %lx -- %lx (valid = %d, unsafecell = %d)\n", i, cap->bounds[i].base, cap->bounds[i].end,
+                cap_rev_tree_check_valid(cap->bounds[i].rev_node), cap->bounds[i].rev_node->is_unsafecell);
+            CAPSTONE_DEBUG_PRINT("Parents unsafecell:\n");
+            for(cap_rev_node_t *cur = cap->bounds[i].rev_node->parent; cur != NULL; cur = cur->parent) {
+                CAPSTONE_DEBUG_PRINT("UnsafeCell = %d\n", cur->is_unsafecell);
+            }
         }
     }
 }
@@ -1058,7 +1092,10 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
                 riscv_raise_exception_bp(env, RISCV_EXCP_LOAD_ACCESS_FAULT, GETPC());
             }
 
-            assert(cap_rev_tree_access(&cr_tree, cap->bounds[0].rev_node, is_store));
+            // cap_rev_node_range_t range;
+            // range.base = addr;
+            // range.end = addr + size;
+            assert(cap_rev_tree_access(&cr_tree, cap->bounds[0].rev_node, &cap->bounds[0].rev_node->range, is_store));
         } else if (!is_far_oob) {
             // If too far OOB, we don't consider it a violation (potentially bad provenance tracking)
             CAPSTONE_DEBUG_PRINT("Capability access OOB %lx size = %x @ pc = %lx\n", addr, size, env->pc);
@@ -1271,6 +1308,8 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
     cap->type = CAP_TYPE_LIN;
     pthread_mutex_lock(&cr_tree_lock);
     cap->bounds[0].rev_node = cap_rev_tree_create_lone_node(&cr_tree, true);
+    cap->bounds[0].rev_node->range.base = rs1_v;
+    cap->bounds[0].rev_node->range.base = rs2_v;
     pthread_mutex_unlock(&cr_tree_lock);
     rd_v->tag = true;
 }

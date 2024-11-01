@@ -82,6 +82,7 @@ void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node) {
         return;
     uintptr_t base = cap_rev_tree_find_root(node)->range.base;
     cap_rev_node_t *head = (cap_rev_node_t*)g_hash_table_lookup(tree->unsafe_cell_subtrees, (gconstpointer)base);
+    node->is_unsafecell = true;
     node->unsafecell_prev = NULL;
     node->unsafecell_next = head;
     if(head != NULL) {
@@ -214,15 +215,16 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node) {
     return true;
 }
 
-bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, bool is_write) {
+bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, cap_rev_node_range_t *range, bool is_write) {
     if (!node->valid || (is_write && !node->mutable))
         return false;
     if (is_write) {
         // invalidate all aliasing nodes that are not parents
-        _invalidate_subtree(tree, node);
+        // _invalidate_subtree(tree, node);
+        _invalidate_subtree_overlap(tree, node, NULL, range);
         cap_rev_node_t *cur;
         for(cur = node; cur->parent != NULL && !cur->is_unsafecell; cur = cur->parent) {
-            _invalidate_subtree_overlap(tree, cur->parent, cur, &node->range);
+            _invalidate_subtree_overlap(tree, cur->parent, cur, range);
         }
         if (cur->is_unsafecell) {
             // Ok this is UnsafeCell, we don't continue invalidation in ancestors, instead, we look at all
@@ -233,10 +235,10 @@ bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, bool is_wri
                 head->valid = false;
             }
             for(head = cur->unsafecell_next; head != NULL; head = head->unsafecell_next) {
-                _invalidate_subtree_overlap(tree, head, NULL, &node->range);
+                _invalidate_subtree_overlap(tree, head, NULL, range);
             }
             for(head = cur->unsafecell_prev; head != NULL; head = head->unsafecell_prev) {
-                _invalidate_subtree_overlap(tree, head, NULL, &node->range);
+                _invalidate_subtree_overlap(tree, head, NULL, range);
             }
             // unpin ancestors
             for(head = cur->parent; head != NULL; head = head->parent) {
@@ -260,6 +262,7 @@ bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t
             _is_far_oob = false;
     }
     if(i < CAP_MAX_PROVENANCE_N) {
+        _is_far_oob = false;
         int j;
         for(j = i; j < CAP_MAX_PROVENANCE_N; j ++) {
             if (bounds[j].rev_node != NULL &&

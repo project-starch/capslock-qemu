@@ -48,7 +48,7 @@ cap_rev_node_t *cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_t *node, 
     uintptr_t base, uintptr_t end, bool is_unsafecell);
 
 /** access through the given node, returns whether the access should be allowed */
-bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, bool is_write);
+bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, cap_rev_node_range_t *range, bool is_write);
 
 bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node);
 
