@@ -105,5 +105,11 @@ inline static void cap_bounds_clear(capfat_t *cap) {
         cap->bounds[i].rev_node = NULL;
 }
 
+inline static cap_rev_node_t *cap_rev_tree_find_root(cap_rev_node_t *node) {
+    assert(node != NULL);
+    cap_rev_node_t *cur;
+    for(cur = node; cur->parent != NULL; cur = cur->parent);
+    return cur;
+}
 
 #endif

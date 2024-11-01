@@ -80,7 +80,7 @@ cap_rev_node_t *cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable
 void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node) {
     if(node->is_unsafecell)
         return;
-    uintptr_t base = node->range.base;
+    uintptr_t base = cap_rev_tree_find_root(node)->range.base;
     cap_rev_node_t *head = (cap_rev_node_t*)g_hash_table_lookup(tree->unsafe_cell_subtrees, (gconstpointer)base);
     node->unsafecell_prev = NULL;
     node->unsafecell_next = head;
@@ -105,11 +105,12 @@ void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node) {
             prev->unsafecell_next = next;
         } else {
             // new head
+            uintptr_t base = cap_rev_tree_find_root(node)->range.base;
             if(next != NULL) {
-                g_hash_table_insert(tree->unsafe_cell_subtrees, (gpointer)node->range.base, (gpointer)next);
+                g_hash_table_insert(tree->unsafe_cell_subtrees, (gpointer)base, (gpointer)next);
             } else {
                 // empty now
-                g_hash_table_remove(tree->unsafe_cell_subtrees, (gconstpointer)node->range.base);
+                g_hash_table_remove(tree->unsafe_cell_subtrees, (gconstpointer)base);
             }
         }
         if(next) {
@@ -159,6 +160,8 @@ void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_t *node) {
 
 // subtree_root itself excluded
 static void _invalidate_subtree(cap_rev_tree_t *tree, cap_rev_node_t *subtree_root) {
+    if (!subtree_root->valid)
+        return;
     static GQueue stack = G_QUEUE_INIT;
     g_queue_push_head(&stack, subtree_root);
     while (!g_queue_is_empty(&stack)) {
@@ -180,6 +183,8 @@ static inline bool range_overlaps(cap_rev_node_range_t *a, cap_rev_node_range_t 
 // subtree_root itself and the subtree at except are excluded
 static void _invalidate_subtree_overlap(cap_rev_tree_t *tree, cap_rev_node_t *subtree_root,
     cap_rev_node_t *except, cap_rev_node_range_t *range) {
+    if (!subtree_root->valid)
+        return;
 
     cap_rev_node_t *new_child = NULL, *nxt;
     for(cap_rev_node_t *child = subtree_root->child; child != NULL; child = nxt) {
@@ -188,8 +193,8 @@ static void _invalidate_subtree_overlap(cap_rev_tree_t *tree, cap_rev_node_t *su
             continue;
         if (child != except && range_overlaps(range, &child->range)) {
             // remove this child and invalidate all nodes inside
-            cap_rev_tree_invalidate(tree, child);
             _invalidate_subtree(tree, child);
+            cap_rev_tree_invalidate(tree, child);
         } else {
             // keep this child
             child->sibling = new_child;
@@ -203,8 +208,8 @@ static void _invalidate_subtree_overlap(cap_rev_tree_t *tree, cap_rev_node_t *su
 bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node) {
     if (!node->valid)
         return false;
-    cap_rev_tree_invalidate(tree, node);
     _invalidate_subtree(tree, node);
+    cap_rev_tree_invalidate(tree, node);
 
     return true;
 }
@@ -223,11 +228,19 @@ bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, bool is_wri
             // Ok this is UnsafeCell, we don't continue invalidation in ancestors, instead, we look at all
             // subtrees associated with this UnsafeCell
             cap_rev_node_t *head;
+            // pin ancestors so they are not invalidated if they happen to be UnsafeCells at the same location
+            for(head = cur->parent; head != NULL; head = head->parent) {
+                head->valid = false;
+            }
             for(head = cur->unsafecell_next; head != NULL; head = head->unsafecell_next) {
                 _invalidate_subtree_overlap(tree, head, NULL, &node->range);
             }
             for(head = cur->unsafecell_prev; head != NULL; head = head->unsafecell_prev) {
                 _invalidate_subtree_overlap(tree, head, NULL, &node->range);
+            }
+            // unpin ancestors
+            for(head = cur->parent; head != NULL; head = head->parent) {
+                head->valid = true;
             }
         }
     }

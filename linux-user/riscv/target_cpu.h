@@ -4,8 +4,6 @@
 static inline void cpu_clone_regs_child(CPURISCVState *env, target_ulong newsp,
                                         unsigned flags)
 {
-    env->sp_stack_n = 0;
-
     if (newsp) {
         env->gpr[xSP].val.scalar = newsp;
         env->gpr[xSP].tag = false;

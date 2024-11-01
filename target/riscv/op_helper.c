@@ -900,6 +900,11 @@ void helper_csgetsp(CPURISCVState *env, uint32_t rd, uint64_t idx) {
     // pop the top of the stack below the current sp.
     // this is to support longjmp-like operations e.g., panic
     idx &= 0xfff;
+    if(env->sp_stack_n <= idx) {
+        fprintf(stderr, "Bad stack getsp before popping: %d %lu @ %lx\n", env->sp_stack_n, idx, env->pc);
+        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
+        return;
+    }
     uintptr_t sp = env->gpr[2].val.scalar;
     while (env->sp_stack_n > 0 && env->sp_stack[env->sp_stack_n - 1].val.scalar < sp) {
         drop_impl(env, &env->sp_stack[env->sp_stack_n - 1]);
