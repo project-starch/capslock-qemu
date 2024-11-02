@@ -17,12 +17,18 @@ typedef struct CapRevNodeRange {
     uintptr_t end;
 } cap_rev_node_range_t;
 
+typedef enum {
+    CAP_REV_NODE_TYPE_REF = 0,
+    CAP_REV_NODE_TYPE_RAW = 1,
+    CAP_REV_NODE_TYPE_UNSAFECELL = 2
+} cap_rev_node_type_t;
+
 struct CapRevNode {
     struct CapRevNode *parent, *child, *sibling;
     bool is_free;
     bool mutable;
     bool valid;
-    bool is_unsafecell; /* does this node correspond to an UnsafeCell? */
+    cap_rev_node_type_t ty;
     cap_rev_node_range_t range;
     uint32_t refcount; /* how many associated capabilities */
     struct CapRevNode *unsafecell_prev, *unsafecell_next;
@@ -45,7 +51,7 @@ extern pthread_mutex_t cr_tree_lock;
 
 /* returns the node id for the new revocation capability */
 cap_rev_node_t *cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_t *node, bool mutable,
-    uintptr_t base, uintptr_t end, bool is_unsafecell);
+    uintptr_t base, uintptr_t end);
 
 /** access through the given node, returns whether the access should be allowed */
 bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, cap_rev_node_range_t *range, bool is_write);
@@ -55,7 +61,7 @@ bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node);
 /* creates a new tree with a new node as its root */
 cap_rev_node_t *cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable);
 
-void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node);
+void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node, cap_rev_node_type_t ty);
 
 void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_t *node);
 
@@ -110,6 +116,19 @@ inline static cap_rev_node_t *cap_rev_tree_find_root(cap_rev_node_t *node) {
     cap_rev_node_t *cur;
     for(cur = node; cur->parent != NULL; cur = cur->parent);
     return cur;
+}
+
+inline static bool cap_rev_tree_is_unsafe_cell(cap_rev_node_t *node) {
+    return node->ty == CAP_REV_NODE_TYPE_UNSAFECELL;
+}
+
+inline static bool cap_rev_tree_is_raw(cap_rev_node_t *node) {
+    return node->ty == CAP_REV_NODE_TYPE_UNSAFECELL
+        || node->ty == CAP_REV_NODE_TYPE_RAW;
+}
+
+inline static bool cap_rev_tree_is_ref(cap_rev_node_t *node) {
+    return node->ty == CAP_REV_NODE_TYPE_REF;
 }
 
 #endif

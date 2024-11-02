@@ -811,7 +811,7 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
         // FIXME: mutable borrow should only turn existing overlapping caps into immutable ones
         // it is raw or ref
         rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, true,
-            base, end, false);
+            base, end);
         rd_v->val.cap.bounds[0].base = base;
         rd_v->val.cap.bounds[0].end = end;
     } else {
@@ -832,17 +832,21 @@ void helper_csborrowmut(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
     borrow_impl(env, rd, rs1, rs2, true);
 }
 
-void helper_csmarkunsafecell(CPURISCVState *env, uint32_t rs1) {
+void helper_csmarkunsafecell(CPURISCVState *env, uint32_t rs1, uint32_t rs2) {
     capregval_t *rs1_v = &env->gpr[rs1];
+    cap_rev_node_type_t ty = (cap_rev_node_type_t)env->gpr[rs2].val.scalar;
+    if (rs2 == 0)
+        ty = CAP_REV_NODE_TYPE_REF;
     if(rs1_v->tag) {
         pthread_mutex_lock(&cr_tree_lock);
         if(cap_rev_tree_check_valid(rs1_v->val.cap.bounds[0].rev_node))
-            cap_rev_tree_mark_unsafecell(&cr_tree, rs1_v->val.cap.bounds[0].rev_node);
+            cap_rev_tree_mark_unsafecell(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, ty);
         pthread_mutex_unlock(&cr_tree_lock);
     }
 }
 
 void helper_csshrink(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+    // TODO: use more TCG instructions for better performance
     capregval_t *rd_v = &env->gpr[rd];
     capregval_t *rs1_v = &env->gpr[rs1];
     capregval_t *rs2_v = &env->gpr[rs2];
@@ -1055,10 +1059,10 @@ inline static void print_bounds(capfat_t *cap) {
     for (int i = 0; i < CAP_MAX_PROVENANCE_N; i ++) {
         if (cap->bounds[i].rev_node != NULL) {
             CAPSTONE_DEBUG_PRINT("Bounds %d: %lx -- %lx (valid = %d, unsafecell = %d) @ %p\n", i, cap->bounds[i].base, cap->bounds[i].end,
-                cap_rev_tree_check_valid(cap->bounds[i].rev_node), cap->bounds[i].rev_node->is_unsafecell, cap->bounds[i].rev_node);
+                cap_rev_tree_check_valid(cap->bounds[i].rev_node), cap_rev_tree_is_unsafe_cell(cap->bounds[i].rev_node), cap->bounds[i].rev_node);
             CAPSTONE_DEBUG_PRINT("Parents unsafecell:\n");
             for(cap_rev_node_t *cur = cap->bounds[i].rev_node->parent; cur != NULL; cur = cur->parent) {
-                CAPSTONE_DEBUG_PRINT("UnsafeCell = %d\n", cur->is_unsafecell);
+                CAPSTONE_DEBUG_PRINT("UnsafeCell = %d\n", cap_rev_tree_is_unsafe_cell(cur));
             }
         }
     }
@@ -1109,10 +1113,10 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
             }
 
             cap_rev_node_range_t range;
-            range.base = cap->bounds[0].base;
-            range.end = cap->bounds[0].end;
-            // range.base = addr;
-            // range.end = addr + size;
+            // range.base = cap->bounds[0].base;
+            // range.end = cap->bounds[0].end;
+            range.base = addr;
+            range.end = addr + size;
             assert(cap_rev_tree_access(&cr_tree, cap->bounds[0].rev_node, &range, is_store));
         } else if (!is_far_oob) {
             // If too far OOB, we don't consider it a violation (potentially bad provenance tracking)
@@ -1328,6 +1332,7 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
     cap->bounds[0].rev_node = cap_rev_tree_create_lone_node(&cr_tree, true);
     cap->bounds[0].rev_node->range.base = rs1_v;
     cap->bounds[0].rev_node->range.base = rs2_v;
+    cap->bounds[0].rev_node->ty = CAP_REV_NODE_TYPE_REF;
     pthread_mutex_unlock(&cr_tree_lock);
     rd_v->tag = true;
 }
