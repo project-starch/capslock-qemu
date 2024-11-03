@@ -725,10 +725,16 @@ static void drop_impl(CPURISCVState *env, capregval_t *rv, bool is_stack) {
             //         riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
             //     }
             // }
+            // cap_rev_node_t *node =
+            //     rv->val.cap.bounds[0].rev_node;
+            // fprintf(stderr, "Dropping %lx %p %lx %lx -- %p %lx %lx in %d @ %lx\n",
+            //     rv->val.scalar,
+            //     node, node->range.base, node->range.end,
+            //     root, root->range.base, root->range.end, getpid(), env->pc);
             cap_rev_tree_revoke(&cr_tree, root);
         } else if (!is_far_oob) {
             // FIXME: add a separate one with checks for heap double free
-            CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability!\n");
+            CAPSTONE_DEBUG_PRINT("Attempting to drop an invalid capability! %lx %p in %d @ %lx\n", rv->val.scalar, rv->val.cap.bounds[0].rev_node, getpid(), env->pc);
             riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, GETPC());
         } else
             rv->tag = false;
@@ -776,6 +782,10 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
             CAPSTONE_DEBUG_PRINT("Attempting to borrow from an invalid capability (node = %p) @ pc = %lx!\n",
                 rs1_v->val.cap.bounds[0].rev_node,
                 env->pc);
+            for(cap_rev_node_t *node = rs1_v->val.cap.bounds[0].rev_node; node != NULL; node = node->parent) {
+                fprintf(stderr, "> %p: %d %d %lx %lx\n", node, node->valid, node->ty,
+                    node->range.base, node->range.end);
+            }
             pthread_mutex_unlock(&cr_tree_lock);
             riscv_raise_exception_bp(env, RISCV_EXCP_INVALID_CAP, GETPC());
         }
@@ -798,6 +808,7 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
         // fprintf(stderr, "Borrowing %lx %lx <- %lx %lx @ %lx\n", base, end, rs1_v->val.cap.bounds[0].base, rs1_v->val.cap.bounds[0].end,
         //     env->pc);
 
+        cap_rev_node_t *from_node = rs1_v->val.cap.bounds[0].rev_node;
         if(rs1 != rd) {
             *rd_v = *rs1_v;
         }
@@ -810,8 +821,11 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
         // }
         // FIXME: mutable borrow should only turn existing overlapping caps into immutable ones
         // it is raw or ref
-        rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, rs1_v->val.cap.bounds[0].rev_node, true,
+        for (int i = 1; i < CAP_MAX_PROVENANCE_N; i ++)
+            rd_v->val.cap.bounds[i].rev_node = NULL;
+        rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, from_node, true,
             base, end);
+        // fprintf(stderr, "Borrow new node %p -> %p %lx %lx\n", from_node, rd_v->val.cap.bounds[0].rev_node, base, end);
         rd_v->val.cap.bounds[0].base = base;
         rd_v->val.cap.bounds[0].end = end;
     } else {
@@ -1331,7 +1345,7 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
     pthread_mutex_lock(&cr_tree_lock);
     cap->bounds[0].rev_node = cap_rev_tree_create_lone_node(&cr_tree, true);
     cap->bounds[0].rev_node->range.base = rs1_v;
-    cap->bounds[0].rev_node->range.base = rs2_v;
+    cap->bounds[0].rev_node->range.end = rs2_v;
     cap->bounds[0].rev_node->ty = CAP_REV_NODE_TYPE_REF;
     pthread_mutex_unlock(&cr_tree_lock);
     rd_v->tag = true;
@@ -1363,6 +1377,15 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
                             rs1_v->val.cap.bounds[0].base,
                             rs1_v->val.cap.bounds[0].end,
                             rs1_v->val.cap.bounds[0].rev_node);
+        // print out all ancestors
+        cap_rev_node_t *node;
+        for(node = rs1_v->val.cap.bounds[0].rev_node; node != NULL; node = node->parent) {
+            fprintf(stderr, "> %p: %d %d %lx %lx\n", node, node->valid, node->ty,
+                node->range.base, node->range.end);
+        }
+        for(int i = 1; i < CAP_MAX_PROVENANCE_N; i ++) {
+            fprintf(stderr, "* %p\n", rs1_v->val.cap.bounds[i].rev_node);
+        }
     } else {
         CAPSTONE_DEBUG_PRINT("Print %u = Scalar(0x%lx)\n", rs1, rs1_v->val.scalar);
     }
@@ -1391,18 +1414,30 @@ void helper_csdebugcountprint(CPURISCVState *env) {
 inline static void insert_bounds(capboundsfat_t *dst, capboundsfat_t *src, int *cnt, capaddr_t addr) {
     for(int j = 0; j < CAP_MAX_PROVENANCE_N && src[j].rev_node != NULL;
             j ++) {
+        // bool inserted = false;
         int k;
         for(k = 0; k < *cnt && src[j].rev_node != dst[k].rev_node; k ++);
         if(*cnt < CAP_MAX_PROVENANCE_N && k == *cnt) {
+            // inserted = true;
             dst[*cnt] = src[j];
             *cnt = *cnt + 1;
         } else if(k == *cnt && !cap_is_far_oob(&src[j], addr)) {
             int h;
-            for(h = 0; h < CAP_MAX_PROVENANCE_N && !cap_is_far_oob(&dst[h], addr); h ++);
+            for(h = 0; h < CAP_MAX_PROVENANCE_N && !cap_is_far_oob(&dst[h], addr) &&
+                !(dst[h].rev_node->range.base == src[j].rev_node->range.base &&
+                  dst[h].rev_node->range.end == src[j].rev_node->range.end &&
+                  (src[j].rev_node->alloc_id > dst[h].rev_node->alloc_id ||
+                    (src[j].rev_node->alloc_id == dst[h].rev_node->alloc_id && (dst[h].rev_node->depth < src[j].rev_node->depth
+                    || (dst[h].rev_node->depth == src[j].rev_node->depth && !dst[h].rev_node->valid))))); h ++);
             // full but we want to force this one in
-            if(h < CAP_MAX_PROVENANCE_N)
+            if(h < CAP_MAX_PROVENANCE_N) {
                 dst[h] = src[j];
+                // inserted = true;
+            }
         }
+        // if(inserted) {
+        //     fprintf(stderr, "Inserted %p\n", src[j].rev_node);
+        // }
     }
 }
 

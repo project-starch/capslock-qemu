@@ -31,6 +31,8 @@ struct CapRevNode {
     cap_rev_node_type_t ty;
     cap_rev_node_range_t range;
     uint32_t refcount; /* how many associated capabilities */
+    uint32_t depth;
+    uint64_t alloc_id;
     struct CapRevNode *unsafecell_prev, *unsafecell_next;
 };
 

@@ -66,6 +66,7 @@ static cap_rev_node_t *_cap_rev_tree_alloc_node(cap_rev_tree_t *tree) {
 
 
 cap_rev_node_t *cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable) {
+    static uint64_t alloc_counter;
     cap_rev_node_t *node = _cap_rev_tree_alloc_node(tree);
     node->refcount = 0;
     node->parent = NULL;
@@ -73,6 +74,8 @@ cap_rev_node_t *cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable
     node->child = NULL;
     node->mutable = mutable;
     node->valid = true;
+    node->alloc_id = alloc_counter ++;
+    node->depth = 0;
     return node;
 }
 
@@ -95,7 +98,7 @@ void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node, ca
 
 void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node) {
     assert(node != NULL);
-    // fprintf(stderr, "Invalidating %p = %d, %lx %lx\n", node, node->is_unsafecell, node->range.base, node->range.end);
+    // fprintf(stderr, "Invalidating %p = %d, %lx %lx\n", node, node->ty, node->range.base, node->range.end);
     if(!node->valid)
         return;
 
@@ -135,6 +138,8 @@ cap_rev_node_t *cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_t *node, 
     assert(new_node && "Failed to allocate a new node for borrow!");
     new_node->range.base = base;
     new_node->range.end = end;
+    new_node->depth = node->depth + 1;
+    new_node->alloc_id = node->alloc_id;
     new_node->mutable = mutable;
 
     // connects the new node
@@ -190,7 +195,7 @@ static void _invalidate_subtree_overlap(cap_rev_tree_t *tree, cap_rev_node_t *su
     cap_rev_node_t *except, cap_rev_node_range_t *range, bool skip_raw_children) {
     if (!subtree_root->valid)
         return;
-    // fprintf(stderr, "Subtree overlap %p %d\n", subtree_root, subtree_root->is_unsafecell);
+    // fprintf(stderr, "Subtree overlap %p %lx %lx %d\n", subtree_root, subtree_root->range.base, subtree_root->range.end, subtree_root->ty);
 
     cap_rev_node_t *new_child = NULL, *nxt;
     for(cap_rev_node_t *child = subtree_root->child; child != NULL; child = nxt) {
@@ -199,6 +204,7 @@ static void _invalidate_subtree_overlap(cap_rev_tree_t *tree, cap_rev_node_t *su
             continue;
         if (child != except && range_overlaps(range, &child->range)) {
             // remove this child and invalidate all nodes inside
+            // fprintf(stderr, "Oops %p %lx %lx\n", child, child->range.base, child->range.end);
             _invalidate_subtree(tree, child);
             if (skip_raw_children && cap_rev_tree_is_raw(child)) {
                 child->sibling = new_child;
@@ -229,7 +235,12 @@ bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, cap_rev_nod
     if (!node->valid || (is_write && !node->mutable))
         return false;
     if (is_write) {
-        // fprintf(stderr, "Access %lx %lx node %p = %d\n", range->base, range->end, node, node->is_unsafecell);
+        // fprintf(stderr, "Access %lx %lx node %p = %d, %lx, %lx\n", range->base, range->end, node, node->ty,
+            // node->range.base, node->range.end);
+        // for(cap_rev_node_t *cur = node; cur != NULL; cur = cur->parent) {
+        //     fprintf(stderr, "> %p: %d %d %lx %lx\n", cur, cur->valid, cur->ty,
+        //         cur->range.base, cur->range.end);
+        // }
         // invalidate all aliasing nodes that are not parents
         // _invalidate_subtree(tree, node);
 
@@ -287,15 +298,23 @@ bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t
     }
     if(i < CAP_MAX_PROVENANCE_N) {
         _is_far_oob = false;
-        int j;
-        for(j = i; j < CAP_MAX_PROVENANCE_N; j ++) {
+        for(int j = i; j < CAP_MAX_PROVENANCE_N; j ++) {
             if (bounds[j].rev_node != NULL &&
                 cap_in_bounds(&bounds[j], addr, (capaddr_t)size) &&
-                cap_rev_tree_check_valid(bounds[j].rev_node))
-                break;
+                (bounds[j].rev_node->alloc_id > bounds[i].rev_node->alloc_id
+                || (
+                    bounds[j].rev_node->alloc_id == bounds[i].rev_node->alloc_id &&
+                    (
+                        bounds[j].rev_node->depth > bounds[i].rev_node->depth
+                        || (
+                            bounds[j].rev_node->depth == bounds[i].rev_node->depth
+                            && cap_rev_tree_check_valid(bounds[j].rev_node)
+                        )
+                    )
+                ))
+            )
+                i = j;
         }
-        if(j < CAP_MAX_PROVENANCE_N)
-            i = j;
     }
     // if(i >= CAP_MAX_PROVENANCE_N && !_is_far_oob) {
     //     fprintf(stderr, "Oops %lx %lx\n", addr, (capaddr_t)size);
