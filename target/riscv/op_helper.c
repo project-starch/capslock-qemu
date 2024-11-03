@@ -823,7 +823,7 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
         // it is raw or ref
         for (int i = 1; i < CAP_MAX_PROVENANCE_N; i ++)
             rd_v->val.cap.bounds[i].rev_node = NULL;
-        rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, from_node, true,
+        rd_v->val.cap.bounds[0].rev_node = cap_rev_tree_borrow(&cr_tree, from_node, mutable,
             base, end);
         // fprintf(stderr, "Borrow new node %p -> %p %lx %lx\n", from_node, rd_v->val.cap.bounds[0].rev_node, base, end);
         rd_v->val.cap.bounds[0].base = base;
@@ -1106,8 +1106,8 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
         pthread_mutex_lock(&cr_tree_lock);
         bounds_found = cap_bounds_collapse(&cr_tree, cap->bounds, addr, (capaddr_t)size, &is_far_oob);
         if (bounds_found) {
-            if (is_store && !cap_rev_tree_check_mutable(cap->bounds[0].rev_node)) {
-                CAPSTONE_DEBUG_PRINT("Attempting to use immutable or invalid capability for store (address = %lx, size = %x, node = %p) @ pc = %lx!\n",
+            if (is_store && !cap_rev_tree_check_valid(cap->bounds[0].rev_node)) {
+                CAPSTONE_DEBUG_PRINT("Attempting to use invalid capability for store (address = %lx, size = %x, node = %p) @ pc = %lx!\n",
                     addr, size,
                     cap->bounds[0].rev_node,
                     env->pc);
@@ -1347,6 +1347,7 @@ void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint6
     cap->bounds[0].rev_node->range.base = rs1_v;
     cap->bounds[0].rev_node->range.end = rs2_v;
     cap->bounds[0].rev_node->ty = CAP_REV_NODE_TYPE_REF;
+    // cap_rev_tree_mark_unsafecell(&cr_tree, cap->bounds[0].rev_node, CAP_REV_NODE_TYPE_UNSAFECELL);
     pthread_mutex_unlock(&cr_tree_lock);
     rd_v->tag = true;
 }
