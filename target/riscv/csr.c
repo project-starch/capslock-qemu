@@ -1129,7 +1129,7 @@ static RISCVException write_stimecmph(CPURISCVState *env, int csrno,
 
 static const uint64_t delegable_ints = S_MODE_INTERRUPTS |
                                            VS_MODE_INTERRUPTS |
-                                           M_MODE_INTERRUPTS; /* Capstone */
+                                           M_MODE_INTERRUPTS; /* CapsLock */
 static const uint64_t vs_delegable_ints = VS_MODE_INTERRUPTS;
 static const uint64_t all_ints = M_MODE_INTERRUPTS | S_MODE_INTERRUPTS |
                                      HS_MODE_INTERRUPTS;
@@ -4065,7 +4065,7 @@ static RISCVException write_jvt(CPURISCVState *env, int csrno,
 
 
 
-/* Capstone CSRs */
+/* CapsLock CSRs */
 
 #ifndef CONFIG_USER_ONLY
 

@@ -285,7 +285,7 @@ static bool gen_load_tl_with_cap(DisasContext *ctx, arg_lb *a, MemOp memop)
     // if (memop == MO_TESQ) {
     gen_helper_check_cap_load(cpu_env, addr, rd, tcg_constant_i32((int)memop));
     // }
-    // gen_helper_capstone_debugger(); // just to signal the end of the execution
+    // gen_helper_capslock_debugger(); // just to signal the end of the execution
 
     return true;
 }
@@ -295,7 +295,7 @@ static bool gen_load(DisasContext *ctx, arg_lb *a, MemOp memop)
     // TODO: support capability-based addressing
     decode_save_opc(ctx);
     // if (ctx->priv == PRV_U || (memop & MO_SIZE) == MO_64) {
-        // we need to use Capstone capabilities
+        // we need to use CapsLock capabilities
     return gen_load_tl_with_cap(ctx, a, memop);
     // } else {
     //     if (get_xl(ctx) == MXL_RV128) {
@@ -405,7 +405,7 @@ static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
     tcg_gen_qemu_st_tl(data, addr, ctx->mem_idx, memop);
     gen_helper_store_with_cap(cpu_env, addr, rs1, rs2, memop_v, tcg_constant_i32(1));
     // gen_helper_remove_cap_mem_map(cpu_env, addr, memop_v);
-    // gen_helper_capstone_debugger(); // just to signal the end of the execution
+    // gen_helper_capslock_debugger(); // just to signal the end of the execution
 
     return true;
 }

@@ -457,7 +457,7 @@ int print_insn_rx(bfd_vma, disassemble_info *);
 int print_insn_hexagon(bfd_vma, disassemble_info *);
 int print_insn_loongarch(bfd_vma, disassemble_info *);
 
-#ifdef CONFIG_CAPSTONE
+#ifdef CONFIG_CAPSLOCK
 bool cap_disas_target(disassemble_info *info, uint64_t pc, size_t size);
 bool cap_disas_host(disassemble_info *info, const void *code, size_t size);
 bool cap_disas_monitor(disassemble_info *info, uint64_t pc, int count);
@@ -467,7 +467,7 @@ bool cap_disas_plugin(disassemble_info *info, uint64_t pc, size_t size);
 # define cap_disas_host(i, p, s)    false
 # define cap_disas_monitor(i, p, c) false
 # define cap_disas_plugin(i, p, c)  false
-#endif /* CONFIG_CAPSTONE */
+#endif /* CONFIG_CAPSLOCK */
 
 #ifndef ATTRIBUTE_UNUSED
 #define ATTRIBUTE_UNUSED __attribute__((unused))

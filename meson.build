@@ -3076,7 +3076,7 @@ else
   fdt_opt = 'disabled'
 endif
 
-config_host_data.set('CONFIG_CAPSTONE', capstone.found())
+config_host_data.set('CONFIG_CAPSLOCK', capstone.found())
 config_host_data.set('CONFIG_FDT', fdt.found())
 config_host_data.set('CONFIG_SLIRP', slirp.found())
 

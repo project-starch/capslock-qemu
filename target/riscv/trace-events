@@ -13,8 +13,8 @@ mseccfg_csr_write(uint64_t mhartid, uint64_t val) "hart %" PRIu64 ": write msecc
 # time_helper.c
 riscv_write_timecmp(uint64_t rtc_r, uint64_t timecmp) "rtc_r = %" PRIu64 ", timecmp = %" PRIu64
 
-# Capstone
-capstone_dom_switch_sync(void) ""
-capstone_dom_switch_async(uint32_t direction)  "direction = %" PRIu32
-capstone_h_int(uint32_t irq, uint32_t prev_mode) "H-int %" PRIu32 ", from = %" PRIu32
-capstone_v_int(uint32_t irq, uint32_t mode, uint32_t prev_mode) "V-int %" PRIu32 ", mode = %" PRIu32 ", from = %" PRIu32
+# CapsLock
+capslock_dom_switch_sync(void) ""
+capslock_dom_switch_async(uint32_t direction)  "direction = %" PRIu32
+capslock_h_int(uint32_t irq, uint32_t prev_mode) "H-int %" PRIu32 ", from = %" PRIu32
+capslock_v_int(uint32_t irq, uint32_t mode, uint32_t prev_mode) "V-int %" PRIu32 ", mode = %" PRIu32 ", from = %" PRIu32

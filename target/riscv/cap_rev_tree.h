@@ -34,6 +34,7 @@ struct CapRevNode {
     uint32_t refcount; /* how many associated capabilities */
     uint32_t depth;
     uint64_t alloc_id;
+    uintptr_t pc_invalidate; /* the address at which the node was invalidated */
     struct CapRevNode *unsafecell_prev, *unsafecell_next;
 };
 
@@ -57,9 +58,9 @@ cap_rev_node_t *cap_rev_tree_borrow(cap_rev_tree_t *tree, cap_rev_node_t *node, 
     uintptr_t base, uintptr_t end);
 
 /** access through the given node, returns whether the access should be allowed */
-bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, cap_rev_node_range_t *range, bool is_write);
+bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, cap_rev_node_range_t *range, bool is_write, uintptr_t pc);
 
-bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node);
+bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node, uintptr_t pc);
 
 /* creates a new tree with a new node as its root */
 cap_rev_node_t *cap_rev_tree_create_lone_node(cap_rev_tree_t *tree, bool mutable);
@@ -81,24 +82,16 @@ inline static bool cap_rev_tree_check_mutable(cap_rev_node_t *node) {
 }
 
 
-void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node);
+void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node, bool is_write, uintptr_t pc);
 
 inline static void cap_rev_tree_update_refcount(cap_rev_node_t *node, int32_t delta) {
-    // fprintf(stderr, "R %u %d\n", node_id, delta);
     assert(node != NULL && !node->is_free);
     assert((~node->refcount) > node->refcount);
-    // assert(_CAP_REV_NODE(tree, node_id).refcount != 0);
     node->refcount += delta;
-    // if(_CAP_REV_NODE_REUSABLE(tree, node_id)) {
-    //     cap_rev_tree_release(tree, node_id);
-    // }
 }
 
 inline static void reg_overwrite(cap_rev_tree_t *tree, capregval_t *v) {
-    // if (v->tag) {
-    //     fprintf(stderr, "O %u\n", v->val.cap.rev_node_id);
-    //     cap_rev_tree_update_refcount(tree, v->val.cap.rev_node_id, -1);
-    // }
+
 }
 
 inline static void cap_rev_tree_update_refcount_cap(capfat_t *cap, int32_t delta) {

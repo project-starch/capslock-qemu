@@ -32,7 +32,7 @@
 #include "hw/core/sysbus-fdt.h"
 #include "target/riscv/pmu.h"
 #include "hw/riscv/riscv_hart.h"
-#include "hw/riscv/virt_capstone.h"
+#include "hw/riscv/virt_capslock.h"
 #include "hw/riscv/boot.h"
 #include "hw/riscv/numa.h"
 #include "hw/intc/riscv_aclint.h"
@@ -1236,7 +1236,7 @@ static void create_platform_bus(RISCVVirtState *s, DeviceState *irqchip)
                                 sysbus_mmio_get_region(sysbus, 0));
 }
 
-static void capstone_virt_machine_done(Notifier *notifier, void *data)
+static void capslock_virt_machine_done(Notifier *notifier, void *data)
 {
     RISCVVirtState *s = container_of(notifier, RISCVVirtState,
                                      machine_done);
@@ -1313,11 +1313,11 @@ static void capstone_virt_machine_done(Notifier *notifier, void *data)
     riscv_load_fdt(fdt_load_addr, machine->fdt);
 
     /* load the reset vector */
-    // capstone_setup_rom_reset_vec(machine, &s->soc[0], start_addr,
+    // capslock_setup_rom_reset_vec(machine, &s->soc[0], start_addr,
     //                           virt_memmap[VIRT_MROM].base,
     //                           virt_memmap[VIRT_MROM].size, kernel_entry,
     //                           fdt_load_addr);
-    
+
     riscv_setup_rom_reset_vec(machine, &s->soc[0], start_addr,
                               virt_memmap[VIRT_MROM].base,
                               virt_memmap[VIRT_MROM].size, kernel_entry,
@@ -1332,15 +1332,15 @@ static void capstone_virt_machine_done(Notifier *notifier, void *data)
         riscv_setup_direct_kernel(kernel_entry, fdt_load_addr);
     }
 
-    if (virt_capstone_is_acpi_enabled(s)) {
+    if (virt_capslock_is_acpi_enabled(s)) {
         virt_acpi_setup(s);
     }
 }
 
-static void capstone_virt_machine_init(MachineState *machine)
+static void capslock_virt_machine_init(MachineState *machine)
 {
     const MemMapEntry *memmap = virt_memmap;
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(machine);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(machine);
     MemoryRegion *system_memory = get_system_memory();
     MemoryRegion *mask_rom = g_new(MemoryRegion, 1);
     char *soc_name;
@@ -1530,13 +1530,13 @@ static void capstone_virt_machine_init(MachineState *machine)
     }
     virt_flash_map(s, system_memory);
 
-    s->machine_done.notify = capstone_virt_machine_done;
+    s->machine_done.notify = capslock_virt_machine_done;
     qemu_add_machine_init_done_notifier(&s->machine_done);
 }
 
-static void capstone_virt_machine_instance_init(Object *obj)
+static void capslock_virt_machine_instance_init(Object *obj)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(obj);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(obj);
 
     virt_flash_create(s);
 
@@ -1547,7 +1547,7 @@ static void capstone_virt_machine_instance_init(Object *obj)
 
 static char *virt_get_aia_guests(Object *obj, Error **errp)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(obj);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(obj);
     char val[32];
 
     sprintf(val, "%d", s->aia_guests);
@@ -1556,7 +1556,7 @@ static char *virt_get_aia_guests(Object *obj, Error **errp)
 
 static void virt_set_aia_guests(Object *obj, const char *val, Error **errp)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(obj);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(obj);
 
     s->aia_guests = atoi(val);
     if (s->aia_guests < 0 || s->aia_guests > VIRT_IRQCHIP_MAX_GUESTS) {
@@ -1568,7 +1568,7 @@ static void virt_set_aia_guests(Object *obj, const char *val, Error **errp)
 
 static char *virt_get_aia(Object *obj, Error **errp)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(obj);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(obj);
     const char *val;
 
     switch (s->aia_type) {
@@ -1588,7 +1588,7 @@ static char *virt_get_aia(Object *obj, Error **errp)
 
 static void virt_set_aia(Object *obj, const char *val, Error **errp)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(obj);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(obj);
 
     if (!strcmp(val, "none")) {
         s->aia_type = VIRT_AIA_TYPE_NONE;
@@ -1605,19 +1605,19 @@ static void virt_set_aia(Object *obj, const char *val, Error **errp)
 
 static bool virt_get_aclint(Object *obj, Error **errp)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(obj);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(obj);
 
     return s->have_aclint;
 }
 
 static void virt_set_aclint(Object *obj, bool value, Error **errp)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(obj);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(obj);
 
     s->have_aclint = value;
 }
 
-bool virt_capstone_is_acpi_enabled(RISCVVirtState *s)
+bool virt_capslock_is_acpi_enabled(RISCVVirtState *s)
 {
     return s->acpi != ON_OFF_AUTO_OFF;
 }
@@ -1625,7 +1625,7 @@ bool virt_capstone_is_acpi_enabled(RISCVVirtState *s)
 static void virt_get_acpi(Object *obj, Visitor *v, const char *name,
                           void *opaque, Error **errp)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(obj);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(obj);
     OnOffAuto acpi = s->acpi;
 
     visit_type_OnOffAuto(v, name, &acpi, errp);
@@ -1634,12 +1634,12 @@ static void virt_get_acpi(Object *obj, Visitor *v, const char *name,
 static void virt_set_acpi(Object *obj, Visitor *v, const char *name,
                           void *opaque, Error **errp)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(obj);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(obj);
 
     visit_type_OnOffAuto(v, name, &s->acpi, errp);
 }
 
-static HotplugHandler *capstone_virt_machine_get_hotplug_handler(MachineState *machine,
+static HotplugHandler *capslock_virt_machine_get_hotplug_handler(MachineState *machine,
                                                         DeviceState *dev)
 {
     MachineClass *mc = MACHINE_GET_CLASS(machine);
@@ -1650,10 +1650,10 @@ static HotplugHandler *capstone_virt_machine_get_hotplug_handler(MachineState *m
     return NULL;
 }
 
-static void capstone_virt_machine_device_plug_cb(HotplugHandler *hotplug_dev,
+static void capslock_virt_machine_device_plug_cb(HotplugHandler *hotplug_dev,
                                         DeviceState *dev, Error **errp)
 {
-    RISCVVirtState *s = CAPSTONE_VIRT_MACHINE(hotplug_dev);
+    RISCVVirtState *s = CAPSLOCK_VIRT_MACHINE(hotplug_dev);
 
     if (s->platform_bus_dev) {
         MachineClass *mc = MACHINE_GET_CLASS(s);
@@ -1665,14 +1665,14 @@ static void capstone_virt_machine_device_plug_cb(HotplugHandler *hotplug_dev,
     }
 }
 
-static void capstone_virt_machine_class_init(ObjectClass *oc, void *data)
+static void capslock_virt_machine_class_init(ObjectClass *oc, void *data)
 {
     char str[128];
     MachineClass *mc = MACHINE_CLASS(oc);
     HotplugHandlerClass *hc = HOTPLUG_HANDLER_CLASS(oc);
 
     mc->desc = "RISC-V Capstone VirtIO board";
-    mc->init = capstone_virt_machine_init;
+    mc->init = capslock_virt_machine_init;
     mc->max_cpus = VIRT_CPUS_MAX;
     mc->default_cpu_type = TYPE_RISCV_CPU_BASE;
     mc->pci_allow_0_address = true;
@@ -1684,9 +1684,9 @@ static void capstone_virt_machine_class_init(ObjectClass *oc, void *data)
     mc->cpu_cluster_has_numa_boundary = true;
     mc->default_ram_id = "riscv_virt_board.ram";
     assert(!mc->get_hotplug_handler);
-    mc->get_hotplug_handler = capstone_virt_machine_get_hotplug_handler;
+    mc->get_hotplug_handler = capslock_virt_machine_get_hotplug_handler;
 
-    hc->plug = capstone_virt_machine_device_plug_cb;
+    hc->plug = capslock_virt_machine_device_plug_cb;
 
     machine_class_allow_dynamic_sysbus_dev(mc, TYPE_RAMFB_DEVICE);
 #ifdef CONFIG_TPM
@@ -1721,11 +1721,11 @@ static void capstone_virt_machine_class_init(ObjectClass *oc, void *data)
                                           "Enable ACPI");
 }
 
-static const TypeInfo capstone_virt_machine_typeinfo = {
-    .name       = MACHINE_TYPE_NAME("virt-capstone"),
+static const TypeInfo capslock_virt_machine_typeinfo = {
+    .name       = MACHINE_TYPE_NAME("virt-capslock"),
     .parent     = TYPE_MACHINE,
-    .class_init = capstone_virt_machine_class_init,
-    .instance_init = capstone_virt_machine_instance_init,
+    .class_init = capslock_virt_machine_class_init,
+    .instance_init = capslock_virt_machine_instance_init,
     .instance_size = sizeof(RISCVVirtState),
     .interfaces = (InterfaceInfo[]) {
          { TYPE_HOTPLUG_HANDLER },
@@ -1733,9 +1733,9 @@ static const TypeInfo capstone_virt_machine_typeinfo = {
     },
 };
 
-static void capstone_virt_machine_init_register_types(void)
+static void capslock_virt_machine_init_register_types(void)
 {
-    type_register_static(&capstone_virt_machine_typeinfo);
+    type_register_static(&capslock_virt_machine_typeinfo);
 }
 
-type_init(capstone_virt_machine_init_register_types)
+type_init(capslock_virt_machine_init_register_types)

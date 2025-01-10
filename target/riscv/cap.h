@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#define CAPSTONE_CPMP_COUNT 16
+#define CAPSLOCK_CPMP_COUNT 16
 
 typedef uint64_t capaddr_t;
 

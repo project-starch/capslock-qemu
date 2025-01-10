@@ -38,7 +38,7 @@
 #include "kvm_riscv.h"
 #include "tcg/tcg.h"
 #include "cap.h"
-#include "capstone_defs.h"
+#include "capslock_defs.h"
 #include "cap_rev_tree.h"
 #include "cap_mem_map.h"
 
@@ -419,7 +419,7 @@ static void rv64_base_cpu_init(Object *obj)
     env->cih.tag = false;
     env->cepc.tag = false;
     env->cscratch.tag = false;
-    for(i = 0; i < CAPSTONE_CPMP_COUNT; i ++) {
+    for(i = 0; i < CAPSLOCK_CPMP_COUNT; i ++) {
         env->cpmp[i].tag = false;
     }
 }
@@ -1580,17 +1580,17 @@ static inline int riscv_conflate_irq(int irq) {
 //         case IRQ_U_EXT:
 //         case IRQ_S_EXT:
 //         case IRQ_M_EXT:
-//             res = CAPSTONE_IRQ_EXT;
+//             res = CAPSLOCK_IRQ_EXT;
 //             break;
 //         case IRQ_U_TIMER:
 //         case IRQ_S_TIMER:
 //         case IRQ_M_TIMER:
-//             res = CAPSTONE_IRQ_TIMER;
+//             res = CAPSLOCK_IRQ_TIMER;
 //             break;
 //         case IRQ_U_SOFT:
 //         case IRQ_S_SOFT:
 //         case IRQ_M_SOFT:
-//             res = CAPSTONE_IRQ_SOFT;
+//             res = CAPSLOCK_IRQ_SOFT;
 //             break;
 //         default: ;
 //     }
@@ -1621,8 +1621,8 @@ static void riscv_cpu_set_irq(void *opaque, int irq, int level)
             //     kvm_riscv_set_irq(cpu, irq, level);
             // } else {
             if(env->cap_mem) {
-                int capstone_irq = riscv_conflate_irq(irq);
-                riscv_cpu_update_h_int(env, capstone_irq, level);
+                int capslock_irq = riscv_conflate_irq(irq);
+                riscv_cpu_update_h_int(env, capslock_irq, level);
             } else {
                 riscv_cpu_update_mip(env, 1 << irq, BOOL_TO_MASK(level));
             }
@@ -1635,8 +1635,8 @@ static void riscv_cpu_set_irq(void *opaque, int irq, int level)
             // } else {
             env->external_seip = level;
             if(env->cap_mem) {
-                int capstone_irq = riscv_conflate_irq(irq);
-                riscv_cpu_update_h_int(env, capstone_irq, level | env->software_seip);
+                int capslock_irq = riscv_conflate_irq(irq);
+                riscv_cpu_update_h_int(env, capslock_irq, level | env->software_seip);
             } else {
                 riscv_cpu_update_mip(env, 1 << irq,
                                      BOOL_TO_MASK(level | env->software_seip));
@@ -2087,7 +2087,7 @@ static const struct TCGCPUOps riscv_tcg_ops = {
 
 #ifndef CONFIG_USER_ONLY
     .tlb_fill = riscv_cpu_tlb_fill,
-    .pre_mem_access = capstone_pre_mem_access,
+    .pre_mem_access = capslock_pre_mem_access,
     .cpu_exec_interrupt = riscv_cpu_exec_interrupt,
     .do_interrupt = riscv_cpu_do_interrupt,
     .do_transaction_failed = riscv_cpu_do_transaction_failed,

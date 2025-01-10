@@ -16,8 +16,8 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef HW_CAPSTONE_VIRT_H
-#define HW_CAPSTONE_VIRT_H
+#ifndef HW_CAPSLOCK_VIRT_H
+#define HW_CAPSLOCK_VIRT_H
 
 #include "hw/boards.h"
 #include "hw/riscv/riscv_hart.h"
@@ -29,10 +29,10 @@
 #define VIRT_SOCKETS_MAX_BITS          2
 #define VIRT_SOCKETS_MAX               (1 << VIRT_SOCKETS_MAX_BITS)
 
-#define TYPE_CAPSTONE_VIRT_MACHINE MACHINE_TYPE_NAME("virt-capstone")
+#define TYPE_CAPSLOCK_VIRT_MACHINE MACHINE_TYPE_NAME("virt-capslock")
 typedef struct RISCVVirtState RISCVVirtState;
-DECLARE_INSTANCE_CHECKER(RISCVVirtState, CAPSTONE_VIRT_MACHINE,
-                         TYPE_CAPSTONE_VIRT_MACHINE)
+DECLARE_INSTANCE_CHECKER(RISCVVirtState, CAPSLOCK_VIRT_MACHINE,
+                         TYPE_CAPSLOCK_VIRT_MACHINE)
 
 typedef enum RISCVVirtAIAType {
     VIRT_AIA_TYPE_NONE = 0,
@@ -125,6 +125,6 @@ enum {
 #define FDT_APLIC_INT_MAP_WIDTH (FDT_PCI_ADDR_CELLS + FDT_PCI_INT_CELLS + \
                                  1 + FDT_APLIC_INT_CELLS)
 
-bool virt_capstone_is_acpi_enabled(RISCVVirtState *s);
+bool virt_capslock_is_acpi_enabled(RISCVVirtState *s);
 void virt_acpi_setup(RISCVVirtState *vms);
 #endif

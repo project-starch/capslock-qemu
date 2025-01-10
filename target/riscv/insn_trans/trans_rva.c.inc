@@ -64,7 +64,7 @@ static bool gen_sc(DisasContext *ctx, arg_atomic *a, MemOp mop)
     dest = tcg_temp_new();
     // dest = dest_gpr(ctx, a->rd);
     src2 = get_gpr(ctx, a->rs2, EXT_NONE);
-    // gen_helper_capstone_debugger(cpu_env, src2);
+    // gen_helper_capslock_debugger(cpu_env, src2);
 
     tcg_gen_atomic_cmpxchg_tl(dest, load_res, load_val, src2,
                               ctx->mem_idx, mop);

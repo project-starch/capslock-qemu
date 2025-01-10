@@ -42,8 +42,6 @@ static void _cap_rev_tree_gc(cap_rev_tree_t *tree) {
             }
         }
     }
-    // fprintf(stderr, "GC: reusable = %d, free = %d, invalid = %d, to release = %d\n",
-    //     reusable_c, free_c, invalid_c, to_release_c);
 }
 
 static cap_rev_node_t *_cap_rev_tree_alloc_node(cap_rev_tree_t *tree) {
@@ -97,17 +95,15 @@ void cap_rev_tree_mark_unsafecell(cap_rev_tree_t *tree, cap_rev_node_t *node, ca
     }
 }
 
-void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node) {
+void cap_rev_tree_invalidate(cap_rev_tree_t *tree, cap_rev_node_t *node, bool is_write, uintptr_t pc) {
     assert(node != NULL);
-    // fprintf(stderr, "Invalidating %p = %d, %lx %lx\n", node, node->ty, node->range.base, node->range.end);
     if(!node->valid)
         return;
 
-    // if ((node->range.base & 0xffffff) == 0xd40) {
-    //     fprintf(stderr, "Invalidated %lx %p\n", node->range.base, node);
-    // }
-
-    node->valid = false;
+    if (is_write || node->mutable) {
+        node->valid = false;
+    }
+    node->pc_invalidate = pc;
 
     if (cap_rev_tree_is_unsafe_cell(node)) {
         // remove from unsafecell list
@@ -168,25 +164,34 @@ void cap_rev_tree_release(cap_rev_tree_t *tree, cap_rev_node_t *node) {
 }
 
 
+
 // subtree_root itself excluded
-static void _invalidate_subtree(cap_rev_tree_t *tree, cap_rev_node_t *subtree_root) {
+static void _invalidate_subtree(cap_rev_tree_t *tree, cap_rev_node_t *subtree_root, bool is_write, uintptr_t pc) {
     if (!subtree_root->valid)
         return;
-    // fprintf(stderr, "Subtree %p %d\n", subtree_root, subtree_root->is_unsafecell);
     static GQueue stack = G_QUEUE_INIT;
     g_queue_push_head(&stack, subtree_root);
     while (!g_queue_is_empty(&stack)) {
         cap_rev_node_t *cur = (cap_rev_node_t*)g_queue_pop_head(&stack);
+        cap_rev_node_t *new_child = NULL, *nxt;
         assert(cur);
-        for (cap_rev_node_t *child = cur->child; child != NULL; child = child->sibling) {
+        for (cap_rev_node_t *child = cur->child; child != NULL; child = nxt) {
+            nxt = child->sibling;
             if(!child->valid)
                 continue;
-            cap_rev_tree_invalidate(tree, child);
-            g_queue_push_head(&stack, child);
+            cap_rev_tree_invalidate(tree, child, is_write, pc);
+            if (child->valid) {
+                child->sibling = new_child;
+                new_child = child;
+            } else {
+                g_queue_push_head(&stack, child);
+            }
         }
+        subtree_root->child = new_child;
+        is_write = true;
     }
-    subtree_root->child = NULL;
 }
+
 
 static inline bool range_overlaps(cap_rev_node_range_t *a, cap_rev_node_range_t *b) {
     return !(a->end <= b->base || b->end <= a->base);
@@ -194,10 +199,10 @@ static inline bool range_overlaps(cap_rev_node_range_t *a, cap_rev_node_range_t 
 
 // subtree_root itself and the subtree at except are excluded
 static void _invalidate_subtree_overlap(cap_rev_tree_t *tree, cap_rev_node_t *subtree_root,
-    cap_rev_node_t *except, cap_rev_node_range_t *range, bool skip_raw_children, bool mutable_ref_only) {
+    cap_rev_node_t *except, cap_rev_node_range_t *range, bool skip_raw_children, bool is_write,
+    uintptr_t pc) {
     if (!subtree_root->valid)
         return;
-    // fprintf(stderr, "Subtree overlap %p %lx %lx %d\n", subtree_root, subtree_root->range.base, subtree_root->range.end, subtree_root->ty);
 
     cap_rev_node_t *new_child = NULL, *nxt;
     for(cap_rev_node_t *child = subtree_root->child; child != NULL; child = nxt) {
@@ -207,105 +212,74 @@ static void _invalidate_subtree_overlap(cap_rev_tree_t *tree, cap_rev_node_t *su
         bool keep_child = true;
         if (child != except && !child->pinned && range_overlaps(range, &child->range)) {
             // remove this child and invalidate all nodes inside
-            // fprintf(stderr, "Oops %p %lx %lx\n", child, child->range.base, child->range.end);
-            if(mutable_ref_only) {
-                if (child->mutable) {
-                    if (cap_rev_tree_is_ref(child)) {
-                        _invalidate_subtree(tree, child);
-                        keep_child = false;
-                    } else {
-                        _invalidate_subtree_overlap(tree, child, NULL, range, false, true);
-                    }
-                }
-            } else {
-                _invalidate_subtree(tree, child);
-                if (!skip_raw_children || !cap_rev_tree_is_raw(child)) {
+            if (child->mutable || is_write) {
+                if (cap_rev_tree_is_ref(child)) {
+                    _invalidate_subtree(tree, child, is_write, pc);
                     keep_child = false;
+                } else {
+                    _invalidate_subtree_overlap(tree, child, NULL, range, false, is_write, pc);
                 }
             }
         }
-        if (keep_child) {
+        if (!keep_child) {
+            cap_rev_tree_invalidate(tree, child, is_write, pc);
+        }
+        if (child->valid) {
             // keep this child
             child->sibling = new_child;
             new_child = child;
-        } else {
-            cap_rev_tree_invalidate(tree, child);
         }
     }
     subtree_root->child = new_child;
 }
 
 // invalidate whole subtree including the root
-bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node) {
+bool cap_rev_tree_revoke(cap_rev_tree_t *tree, cap_rev_node_t *node, uintptr_t pc) {
     if (!node->valid)
         return false;
     assert(node->parent == NULL); /* this only supports root nodes */
-    _invalidate_subtree(tree, node);
-    cap_rev_tree_invalidate(tree, node);
+    _invalidate_subtree(tree, node, true, pc);
+    cap_rev_tree_invalidate(tree, node, true, pc);
 
     return true;
 }
 
-bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, cap_rev_node_range_t *range, bool is_write) {
-    // if (!node->valid || (is_write && !node->mutable))
+bool cap_rev_tree_access(cap_rev_tree_t *tree, cap_rev_node_t *node, cap_rev_node_range_t *range, bool is_write, uintptr_t pc) {
     if (!node->valid)
         return false;
-    if (is_write) {
-        // fprintf(stderr, "Access %lx %lx node %p = %d, %lx, %lx\n", range->base, range->end, node, node->ty,
-            // node->range.base, node->range.end);
-        // for(cap_rev_node_t *cur = node; cur != NULL; cur = cur->parent) {
-        //     fprintf(stderr, "> %p: %d %d %lx %lx\n", cur, cur->valid, cur->ty,
-        //         cur->range.base, cur->range.end);
-        // }
-        // invalidate all aliasing nodes that are not parents
-        // _invalidate_subtree(tree, node);
-
-        /* Do different things depending on the pointer type */
-        // bool skip_raw_children = false;
-        // switch (node->ty) {
-        //     CAP_REV_NODE_TYPE_REF:
-        //         break;
-        //     CAP_REV_NODE_TYPE_UNSAFECELL: /* UnsafeCell itself is raw */
-        //     CAP_REV_NODE_TYPE_RAW:
-        //         skip_raw_children = true;
-        // }
-        _invalidate_subtree_overlap(tree, node, NULL, range, false, false);
-        cap_rev_node_t *cur;
-        for(cur = node; cur->parent != NULL && !cap_rev_tree_is_unsafe_cell(cur); cur = cur->parent) {
-            _invalidate_subtree_overlap(tree, cur->parent, cur, range,
-                /* skip raw siblings */ cap_rev_tree_is_raw(cur), false);
-        }
-        if (cap_rev_tree_is_unsafe_cell(cur)) {
-            // Ok this is UnsafeCell, we don't continue invalidation in ancestors, instead, we look at all
-            // subtrees associated with this UnsafeCell
-            cap_rev_node_t *head;
-            // pin ancestors so they are not invalidated if they happen to be UnsafeCells at the same location
-            for(head = cur->parent; head != NULL; head = head->parent) {
-                head->pinned = true;
-            }
-            for(head = cur->unsafecell_next; head != NULL; head = head->unsafecell_next) {
-                // fprintf(stderr, "UnsafeCell %p\n", head);
-                _invalidate_subtree_overlap(tree, head, NULL, range, false, false);
-            }
-            for(head = cur->unsafecell_prev; head != NULL; head = head->unsafecell_prev) {
-                // fprintf(stderr, "UnsafeCell %p\n", head);
-                _invalidate_subtree_overlap(tree, head, NULL, range, false, false);
-            }
-            // unpin ancestors
-            for(head = cur->parent; head != NULL; head = head->parent) {
-                head->pinned = false;
-            }
-
-            // continue to the root to invalidate aliasing mutable references
-            for(; cur->parent != NULL; cur = cur->parent) {
-                bool mutable_ref_only = cur->parent->parent != NULL;
-                _invalidate_subtree_overlap(tree, cur->parent, cur, range,
-                    cap_rev_tree_is_raw(cur), mutable_ref_only);
-            }
-
-        }
+    if (!is_write)
+        return true;
+    _invalidate_subtree_overlap(tree, node, NULL, range, false, is_write, pc);
+    cap_rev_node_t *cur;
+    for(cur = node; cur->parent != NULL && !cap_rev_tree_is_unsafe_cell(cur); cur = cur->parent) {
+        _invalidate_subtree_overlap(tree, cur->parent, cur, range,
+            /* skip raw siblings */ cap_rev_tree_is_raw(cur), is_write, pc);
     }
-    // no need to do anything for read
+    if (cap_rev_tree_is_unsafe_cell(cur)) {
+        cap_rev_node_t *head;
+        // pin ancestors so they are not invalidated if they happen to be UnsafeCells at the same location
+        for(head = cur->parent; head != NULL; head = head->parent) {
+            head->pinned = true;
+        }
+        for(head = cur->unsafecell_next; head != NULL; head = head->unsafecell_next) {
+            _invalidate_subtree_overlap(tree, head, NULL, range, false, is_write, pc);
+        }
+        for(head = cur->unsafecell_prev; head != NULL; head = head->unsafecell_prev) {
+            _invalidate_subtree_overlap(tree, head, NULL, range, false, is_write, pc);
+        }
+        // unpin ancestors
+        for(head = cur->parent; head != NULL; head = head->parent) {
+            head->pinned = false;
+        }
+
+        // continue to the root to invalidate aliasing mutable references
+        for(; cur->parent != NULL; cur = cur->parent) {
+            bool is_write = cur->parent->parent == NULL;
+            _invalidate_subtree_overlap(tree, cur->parent, cur, range,
+                cap_rev_tree_is_raw(cur), is_write, pc);
+        }
+
+    }
 
     return true;
 }
@@ -340,14 +314,6 @@ bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t
                 i = j;
         }
     }
-    // if(i >= CAP_MAX_PROVENANCE_N && !_is_far_oob) {
-    //     fprintf(stderr, "Oops %lx %lx\n", addr, (capaddr_t)size);
-    //     for(int j = 0; j < CAP_MAX_PROVENANCE_N; j ++) {
-    //         fprintf(stderr, "Bounds: %lx %lx %lx %d %d\n", bounds[j].base, bounds[j].end,
-    //             cap_distance(&bounds[j], addr), bounds[j].rev_node != NULL,
-    //             cap_in_bounds(&bounds[j], addr, (capaddr_t)size));
-    //     }
-    // }
     if(i < CAP_MAX_PROVENANCE_N) {
         bounds[0] = bounds[i];
         for(int j = 1; j < CAP_MAX_PROVENANCE_N; j ++)

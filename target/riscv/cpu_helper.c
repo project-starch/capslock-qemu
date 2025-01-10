@@ -33,7 +33,7 @@
 #include "cap.h"
 #include "debug.h"
 #include "tcg/oversized-guest.h"
-#include "capstone_defs.h"
+#include "capslock_defs.h"
 #include "exec/cpu_ldst.h"
 
 int riscv_cpu_mmu_index(CPURISCVState *env, bool ifetch)
@@ -653,7 +653,6 @@ void riscv_cpu_check_interrupts(CPURISCVState *env) {
 
     vstip = env->vstime_irq ? MIP_VSTIP : 0;
 
-    // if(env->cis & CAPSTONE_CIS_PENDING_MASK) {
     if(env->cis) {
         // we got some pending H-interrupts
                 cpu_interrupt(cs, CPU_INTERRUPT_HARD);
@@ -664,12 +663,10 @@ void riscv_cpu_check_interrupts(CPURISCVState *env) {
     }
 }
 
-void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level) {
-    // assert(capstone_irq >= 0 && capstone_irq <= CAPSTONE_IRQ_MX);
-    assert(capstone_irq != IRQ_S_TIMER && capstone_irq != IRQ_S_SOFT);
+void riscv_cpu_update_h_int(CPURISCVState *env, int capslock_irq, int level) {
+    assert(capslock_irq != IRQ_S_TIMER && capslock_irq != IRQ_S_SOFT);
 
-    // uint64_t mask = (1 << (capstone_irq << 1));
-    uint64_t mask = 1 << capstone_irq;
+    uint64_t mask = 1 << capslock_irq;
     uint64_t value = BOOL_TO_MASK(level);
 
     uint64_t mask_mip = mask & env->cid;
@@ -681,7 +678,7 @@ void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level) {
     env->mip = (env->mip & ~mask_mip) | (value & mask_mip);
 
     // FIXME: a hack to lower supervisor-external
-    if(level == 0 && capstone_irq == IRQ_S_EXT) {
+    if(level == 0 && capslock_irq == IRQ_S_EXT) {
         env->mip &= ~(uint64_t)MIP_SEIP;
     }
 
@@ -1636,7 +1633,7 @@ static target_ulong riscv_transformed_insn(CPURISCVState *env,
 }
 #endif /* !CONFIG_USER_ONLY */
 
-static inline bool capstone_int_can_take(CPURISCVState *env) {
+static inline bool capslock_int_can_take(CPURISCVState *env) {
     return env->cih.tag && env->cih.val.cap.type == CAP_TYPE_SEALED &&
         env->cih.val.cap.async == CAP_ASYNC_SYNC;
 }
@@ -1753,7 +1750,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
                   __func__, env->mhartid, async, cause, env->pc, tval,
                   riscv_cpu_get_trap_name(cause, async));
 
-    /* Capstone-specific exception/interrupt handling */
+    /* capslock-specific exception/interrupt handling */
     if (env->priv <= PRV_S &&
         cause < TARGET_LONG_BITS && ((deleg >> cause) & 1)) {
         // TODO: V-interrupts might also be handled here
@@ -1791,7 +1788,7 @@ void riscv_cpu_do_interrupt(CPUState *cs)
         }
 
         if(async)
-            trace_capstone_v_int(cause, PRV_S, env->priv);
+            trace_capslock_v_int(cause, PRV_S, env->priv);
 
         s = env->mstatus;
         s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_SIE));
@@ -1853,30 +1850,12 @@ void riscv_cpu_do_interrupt(CPUState *cs)
 }
 
 
-bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessType access_type, uintptr_t retaddr) {
+bool capslock_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessType access_type, uintptr_t retaddr) {
     bool access_allowed;
     CPURISCVState* env = cs->env_ptr;
 
     access_allowed = true;
-    // capperms_t access = CAP_PERMS_NA;
-    // switch(access_type) {
-    //     case MMU_DATA_LOAD:
-    //     case MMU_CAP_DATA_LOAD:
-    //         access = CAP_PERMS_RO;
-    //         break;
-    //     case MMU_DATA_STORE:
-    //     case MMU_CAP_DATA_STORE:
-    //         access = CAP_PERMS_WO;
-    //         break;
-    //     case MMU_INST_FETCH:
-    //     case MMU_CAP_INST_FETCH:
-    //         access = CAP_PERMS_XO;
-    //         break;
-    // }
-    // access_allowed = false;
-    // for(i = 0; i < CAPSTONE_CPMP_COUNT; i ++) {
-    //     access_allowed = access_allowed || capreg_allow_access(&env->cpmp[i], (capaddr_t)physaddr, (capaddr_t)size, access);
-    // }
+
     if(!access_allowed) {
         // set up exception
         switch(access_type) {
@@ -1905,8 +1884,8 @@ bool capstone_pre_mem_access(CPUState* cs, hwaddr physaddr, int size, MMUAccessT
  * Returns the corresponding host address of a virtual address.
  * This can only be called immediately after a memory access.
  */
-uintptr_t capstone_get_haddr(CPURISCVState *env, vaddr addr, MMUAccessType access_type) {
-#if defined(CAPSTONE_USE_VADDR) || defined(CONFIG_USER_ONLY)
+uintptr_t capslock_get_haddr(CPURISCVState *env, vaddr addr, MMUAccessType access_type) {
+#if defined(CAPSLOCK_USE_VADDR) || defined(CONFIG_USER_ONLY)
     return (hwaddr)addr;
 #else
     unsigned int mmu_idx = cpu_mmu_index(env, false);

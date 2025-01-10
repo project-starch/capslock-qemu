@@ -21,7 +21,7 @@ static __thread cs_insn *cap_insn;
  * This is less than ideal, since we can tell from the first two bits
  * the size of the insn and thus stay in sync with the insn stream.
  */
-static size_t CAPSTONE_API
+static size_t CAPSLOCK_API
 cap_skipdata_s390x_cb(const uint8_t *code, size_t code_size,
                       size_t offset, void *user_data)
 {

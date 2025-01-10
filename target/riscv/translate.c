@@ -118,7 +118,7 @@ typedef struct DisasContext {
     bool frm_valid;
     /* TCG of the current insn_start */
     TCGOp *insn_start;
-    /* Use Capstone capabilities for memory accesses */
+    /* Use CapsLock capabilities for memory accesses */
     bool cap_mem;
 } DisasContext;
 
@@ -1176,7 +1176,7 @@ static uint32_t opcode_at(DisasContextBase *dcbase, target_ulong pc)
 #include "decode-xthead.c.inc"
 #include "insn_trans/trans_xthead.c.inc"
 #include "insn_trans/trans_xventanacondops.c.inc"
-#include "insn_trans/trans_capstone.c.inc"
+#include "insn_trans/trans_capslock.c.inc"
 
 /* Include the auto-generated decoder for 16 bit insn */
 #include "decode-insn16.c.inc"
@@ -1299,7 +1299,7 @@ static void riscv_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     CPURISCVState *env = cpu->env_ptr;
     uint16_t opcode16 = translator_lduw(env, &ctx->base, ctx->base.pc_next);
 
-    // TODO: adding PC checks here for Capstone is not sufficient
+    // TODO: adding PC checks here for CapsLock is not sufficient
     // need to probably learn from how self-modifying code is handled
 
     ctx->ol = ctx->xl;

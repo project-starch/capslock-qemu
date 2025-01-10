@@ -86,5 +86,5 @@ config SPIKE
     select RISCV_ACLINT
     select SIFIVE_PLIC
 
-config CAPSTONE_VIRT
+config CAPSLOCK_VIRT
     bool

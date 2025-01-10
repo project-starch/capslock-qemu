@@ -374,13 +374,13 @@ struct CPUArchState {
     hwaddr kernel_addr;
     hwaddr fdt_addr;
 
-    /* CSRs for Capstone */
+    /* CSRs for CapsLock */
     // TODO: add these to the VM migration state
     capregval_t ctvec; /* sealed capability for exception handler */
     capregval_t cih; /* sealed capability for interrupt handler */
     capregval_t cepc; /* excepting PC capability */
     capregval_t cscratch; /* scratch register for the C mode */
-    capregval_t cpmp[CAPSTONE_CPMP_COUNT]; /* capability for use with MMU-based memory accesses */
+    capregval_t cpmp[CAPSLOCK_CPMP_COUNT]; /* capability for use with MMU-based memory accesses */
 
     target_ulong cis;
     target_ulong cid;
@@ -396,7 +396,7 @@ struct CPUArchState {
     bool load_is_cap; /* whether the load result is a capability */
     capboundsfat_t load_cap_bounds;
 
-    uint64_t capstone_debug_counters[32];
+    uint64_t capslock_debug_counters[32];
     capregval_t sp_stack[SP_STACK_SIZE];
     int sp_stack_n;
 
@@ -482,7 +482,7 @@ void riscv_cpu_list(void);
 void riscv_cpu_validate_set_extensions(RISCVCPU *cpu, Error **errp);
 
 
-bool capstone_pre_mem_access(CPUState* cs, hwaddr phys_addr, int size, MMUAccessType access_type, uintptr_t retaddr);
+bool capslock_pre_mem_access(CPUState* cs, hwaddr phys_addr, int size, MMUAccessType access_type, uintptr_t retaddr);
 
 #define cpu_list riscv_cpu_list
 #define cpu_mmu_index riscv_cpu_mmu_index
@@ -499,7 +499,7 @@ void riscv_cpu_swap_hypervisor_regs(CPURISCVState *env);
 int riscv_cpu_claim_interrupts(RISCVCPU *cpu, uint64_t interrupts);
 uint64_t riscv_cpu_update_mip(CPURISCVState *env, uint64_t mask,
                               uint64_t value);
-void riscv_cpu_update_h_int(CPURISCVState *env, int capstone_irq, int level);
+void riscv_cpu_update_h_int(CPURISCVState *env, int capslock_irq, int level);
 
 #define BOOL_TO_MASK(x) (-!!(x)) /* helper for riscv_cpu_update_mip value */
 void riscv_cpu_set_rdtime_fn(CPURISCVState *env, uint64_t (*fn)(void *),
@@ -763,6 +763,6 @@ const char *satp_mode_str(uint8_t satp_mode, bool is_32_bit);
 
 
 void riscv_cpu_check_interrupts(CPURISCVState *env);
-uintptr_t capstone_get_haddr(CPURISCVState *env, vaddr addr, MMUAccessType access_type);
+uintptr_t capslock_get_haddr(CPURISCVState *env, vaddr addr, MMUAccessType access_type);
 
 #endif /* RISCV_CPU_H */
