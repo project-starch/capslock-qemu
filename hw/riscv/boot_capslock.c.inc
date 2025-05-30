@@ -6,7 +6,6 @@ void capslock_setup_rom_reset_vec(MachineState *machine, RISCVHartArrayState *ha
 {
     int i;
 
-    // TODO: implement
     assert(!riscv_is_32bit(harts)); /* we don't support RV32 for now */
 
     uint32_t reset_vec[3] = {

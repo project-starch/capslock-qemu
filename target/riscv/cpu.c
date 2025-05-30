@@ -414,7 +414,6 @@ static void rv64_base_cpu_init(Object *obj)
     set_satp_mode_max_supported(RISCV_CPU(obj), VM_1_10_SV57);
 #endif
 
-    /* TODO: hack for now */
     env->ctvec.tag = false;
     env->cih.tag = false;
     env->cepc.tag = false;
@@ -1575,26 +1574,6 @@ static void riscv_add_satp_mode_properties(Object *obj)
 }
 
 static inline int riscv_conflate_irq(int irq) {
-//     int res = -1;
-//     switch(irq) {
-//         case IRQ_U_EXT:
-//         case IRQ_S_EXT:
-//         case IRQ_M_EXT:
-//             res = CAPSLOCK_IRQ_EXT;
-//             break;
-//         case IRQ_U_TIMER:
-//         case IRQ_S_TIMER:
-//         case IRQ_M_TIMER:
-//             res = CAPSLOCK_IRQ_TIMER;
-//             break;
-//         case IRQ_U_SOFT:
-//         case IRQ_S_SOFT:
-//         case IRQ_M_SOFT:
-//             res = CAPSLOCK_IRQ_SOFT;
-//             break;
-//         default: ;
-//     }
-//     return res;
     return irq;
 }
 
@@ -1616,23 +1595,16 @@ static void riscv_cpu_set_irq(void *opaque, int irq, int level)
         case IRQ_U_EXT:
         case IRQ_VS_EXT:
         case IRQ_M_EXT:
-            assert(!kvm_enabled()); // We don't support KVM for now
-            // if (kvm_enabled()) {
-            //     kvm_riscv_set_irq(cpu, irq, level);
-            // } else {
+            assert(!kvm_enabled());
             if(env->cap_mem) {
                 int capslock_irq = riscv_conflate_irq(irq);
                 riscv_cpu_update_h_int(env, capslock_irq, level);
             } else {
                 riscv_cpu_update_mip(env, 1 << irq, BOOL_TO_MASK(level));
             }
-            // }
              break;
         case IRQ_S_EXT:
-            assert(!kvm_enabled()); // We don't support KVM for now
-            // if (kvm_enabled()) {
-            //     kvm_riscv_set_irq(cpu, irq, level);
-            // } else {
+            assert(!kvm_enabled());
             env->external_seip = level;
             if(env->cap_mem) {
                 int capslock_irq = riscv_conflate_irq(irq);
@@ -1641,7 +1613,6 @@ static void riscv_cpu_set_irq(void *opaque, int irq, int level)
                 riscv_cpu_update_mip(env, 1 << irq,
                                      BOOL_TO_MASK(level | env->software_seip));
             }
-            // }
             break;
         default:
             g_assert_not_reached();

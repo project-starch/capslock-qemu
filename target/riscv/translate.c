@@ -46,7 +46,6 @@ static TCGv load_val;
 /* globals for PM CSRs */
 static TCGv pm_mask;
 static TCGv pm_base;
-// static TCGv cap_compress_result_lo, cap_compress_result_hi;
 static TCGv data_to_store_with_cap;
 
 /*
@@ -406,7 +405,6 @@ static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs1, 
     TCGLabel *l, *fin;
     TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
     if (reg_num != 0) {
-        // FIXME: incorrect
         switch (get_ol(ctx)) {
         case MXL_RV32:
             gen_reg_overwrite(ctx, reg_num);
@@ -441,7 +439,6 @@ static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs1, 
                 gen_reg_overwrite(ctx, reg_num);
                 tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
                 tcg_gen_mov_tl(cpu_gpr[reg_num], t);
-                // tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
             }
 
             break;
@@ -1299,9 +1296,6 @@ static void riscv_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     CPURISCVState *env = cpu->env_ptr;
     uint16_t opcode16 = translator_lduw(env, &ctx->base, ctx->base.pc_next);
 
-    // TODO: adding PC checks here for CapsLock is not sufficient
-    // need to probably learn from how self-modifying code is handled
-
     ctx->ol = ctx->xl;
     decode_opc(env, ctx, opcode16);
     ctx->base.pc_next += ctx->cur_insn_len;
@@ -1415,8 +1409,4 @@ void riscv_translate_init(void)
 
     data_to_store_with_cap = tcg_global_mem_new(cpu_env, offsetof(CPURISCVState, data_to_store_with_cap),
                                 "data_to_store_with_cap");
-    // cap_compress_result_lo = tcg_global_mem_new(cpu_env,
-    //     offsetof(CPURISCVState, cap_compress_result_lo), "cap_compress_result_lo");
-    // cap_compress_result_hi = tcg_global_mem_new(cpu_env,
-    //     offsetof(CPURISCVState, cap_compress_result_hi), "cap_compress_result_hi");
 }

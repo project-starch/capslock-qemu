@@ -569,60 +569,6 @@ target_ulong helper_hyp_hlvx_wu(CPURISCVState *env, target_ulong addr)
 
 /* CapsLock helpers */
 
-// void helper_csmovc(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
-//     capregval_t *rd_v = &env->gpr[rd];
-//     capregval_t *rs1_v = &env->gpr[rs1];
-
-//     if(rs1 != rd) {
-//         *rd_v = *rs1_v;
-//         if(rs1_v->tag && !captype_is_copyable(rs1_v->val.cap.type)) {
-//             *rs1_v = CAPREGVAL_NULL;
-//         }
-//     }
-// }
-
-// void helper_cscincoffset(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
-//     capregval_t *rd_v = &env->gpr[rd];
-//     capregval_t *rs1_v = &env->gpr[rs1];
-//     capregval_t *rs2_v = &env->gpr[rs2];
-
-//     assert(rs1_v->tag && !rs2_v->tag);
-
-//     assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
-//            rs1_v->val.cap.type != CAP_TYPE_SEALED);
-
-//     capaddr_t offset = rs2_v->val.scalar;
-
-//     if(rs1 != rd) {
-//         *rd_v = *rs1_v;
-//         if(!captype_is_copyable(rs1_v->val.cap.type)) {
-//             *rs1_v = CAPREGVAL_NULL;
-//         }
-//     }
-
-//     rd_v->val.cap.cursor += offset;
-// }
-
-// void helper_cscincoffsetimm(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t offset) {
-//     capregval_t *rd_v = &env->gpr[rd];
-//     capregval_t *rs1_v = &env->gpr[rs1];
-
-//     assert(rs1_v->tag);
-
-//     assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
-//            rs1_v->val.cap.type != CAP_TYPE_SEALED);
-
-//     if(rs1 != rd) {
-//         *rd_v = *rs1_v;
-//         if(!captype_is_copyable(rs1_v->val.cap.type)) {
-//             *rs1_v = CAPREGVAL_NULL;
-//         }
-//     }
-
-//     rd_v->val.cap.cursor += offset;
-// }
-
-
 static void cap_generate(capregval_t *v, uint64_t base, uint64_t end) {
     capfat_t *cap = &v->val.cap;
     cap_bounds_clear(cap);
@@ -985,7 +931,6 @@ void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccs
 
     CPUState* cpu = env_cpu(env);
 
-    // assert(rs1_v->tag);
     bool needs_tlb_flush = false;
 
     switch((capslock_ccsr_id_t)ccsr_id) {
@@ -1090,14 +1035,6 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
             range.base = addr;
             range.end = addr + size;
             assert(cap_rev_tree_access(&cr_tree, cap->bounds[0].rev_node, &range, is_store, env->pc));
-        // } else if (!is_far_oob && rs1 != xSP) {
-        //     // If too far OOB, we don't consider it a violation (potentially bad provenance tracking)
-        //     CAPSLOCK_DEBUG_PRINT("Capability access OOB %lx size = %x @ pc = %lx\n", addr, size, env->pc);
-        //     print_bounds(cap);
-
-        //     pthread_mutex_unlock(&cr_tree_lock);
-        //     RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
-        //     riscv_raise_exception_bp(env, excp, GETPC());
         } else {
             env->gpr[rs1].tag = false;
         }
@@ -1177,7 +1114,6 @@ void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd, uint3
     pthread_mutex_lock(&cr_tree_lock);
     if (cap_mem_map_query(&cm_map, paddr, &cap)) {
         if (cap.cursor != env->gpr[rd].val.scalar) {
-            // FIXME: a hack; is this device address?
             cap_mem_map_remove(&cm_map, paddr);
         } else {
             env->gpr[rd].tag = true;
@@ -1246,7 +1182,6 @@ void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
     pthread_mutex_lock(&cr_tree_lock);
     if(rs1_v->tag) {
-        // only printing the bounds for now
         assert(rs1_v->val.cap.bounds[0].rev_node != NULL);
         CAPSLOCK_DEBUG_PRINT("Print %u = Cap(valid = %d, mutable = %d, %d, 0x%x, 0x%lx, 0x%lx, 0x%lx, %p)\n",
                             rs1,

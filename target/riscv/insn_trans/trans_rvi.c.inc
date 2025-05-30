@@ -268,42 +268,25 @@ static UNUSED bool gen_load_i128(DisasContext *ctx, arg_lb *a, MemOp memop)
 
 static bool gen_load_tl_with_cap(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
-    // TODO: use helper for now for straightforward implementation
-    // can improve the performance later
     TCGv addr = get_address(ctx, a->rs1, a->imm);
     TCGv_i32 rs1 = tcg_constant_i32(a->rs1);
     TCGv dest = tcg_temp_new();
     TCGv_i32 memop_v = tcg_constant_i32((int)memop);
     TCGv_i32 rd = tcg_constant_i32(a->rd);
 
-    // TODO: memop also needs to be checked here
     tcg_gen_qemu_ld_tl(dest, addr, ctx->mem_idx, memop);
     gen_helper_load_with_cap(cpu_env, addr, rs1, memop_v);
     gen_set_gpr(ctx, a->rd, dest);
 
-    // check if this is a capbaility
-    // if (memop == MO_TESQ) {
     gen_helper_check_cap_load(cpu_env, addr, rd, tcg_constant_i32((int)memop));
-    // }
-    // gen_helper_capslock_debugger(); // just to signal the end of the execution
 
     return true;
 }
 
 static bool gen_load(DisasContext *ctx, arg_lb *a, MemOp memop)
 {
-    // TODO: support capability-based addressing
     decode_save_opc(ctx);
-    // if (ctx->priv == PRV_U || (memop & MO_SIZE) == MO_64) {
-        // we need to use CapsLock capabilities
     return gen_load_tl_with_cap(ctx, a, memop);
-    // } else {
-    //     if (get_xl(ctx) == MXL_RV128) {
-    //         return gen_load_i128(ctx, a, memop);
-    //     } else {
-    //         return gen_load_tl(ctx, a, memop);
-    //     }
-    // }
 }
 
 static bool trans_lb(DisasContext *ctx, arg_lb *a)
@@ -362,7 +345,6 @@ static UNUSED bool gen_store_tl(DisasContext *ctx, arg_sb *a, MemOp memop)
     TCGv_i32 memop_v = tcg_constant_i32(memop);
 
     if ((memop & MO_SIZE) == MO_64) {
-        // gen_helper_debug_print(addr);
         tcg_gen_qemu_st_tl(data, addr, ctx->mem_idx, memop);
         gen_helper_store_with_cap(cpu_env, addr, tcg_constant_i32(a->rs1),
             tcg_constant_i32(a->rs2), memop_v, tcg_constant_i32(0));
@@ -404,8 +386,6 @@ static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
 
     tcg_gen_qemu_st_tl(data, addr, ctx->mem_idx, memop);
     gen_helper_store_with_cap(cpu_env, addr, rs1, rs2, memop_v, tcg_constant_i32(1));
-    // gen_helper_remove_cap_mem_map(cpu_env, addr, memop_v);
-    // gen_helper_capslock_debugger(); // just to signal the end of the execution
 
     return true;
 }
@@ -413,16 +393,7 @@ static bool gen_store_tl_with_cap(DisasContext *ctx, arg_sb *a, MemOp memop)
 static bool gen_store(DisasContext *ctx, arg_sb *a, MemOp memop)
 {
     decode_save_opc(ctx);
-    // if (ctx->priv == PRV_U) {
-        /* perform store using a capability */
-        return gen_store_tl_with_cap(ctx, a, memop);
-    // } else {
-    //     if (get_xl(ctx) == MXL_RV128) {
-    //         return gen_store_i128(ctx, a, memop);
-    //     } else {
-    //         return gen_store_tl(ctx, a, memop);
-    //     }
-    // }
+    return gen_store_tl_with_cap(ctx, a, memop);
 }
 
 static bool trans_sb(DisasContext *ctx, arg_sb *a)

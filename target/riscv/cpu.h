@@ -375,7 +375,6 @@ struct CPUArchState {
     hwaddr fdt_addr;
 
     /* CSRs for CapsLock */
-    // TODO: add these to the VM migration state
     capregval_t ctvec; /* sealed capability for exception handler */
     capregval_t cih; /* sealed capability for interrupt handler */
     capregval_t cepc; /* excepting PC capability */
@@ -387,10 +386,7 @@ struct CPUArchState {
     target_ulong cic;
     target_ulong offsetmmu;
 
-    bool cap_mem; /* temporary: use capabilities for memory accesses */
-
-    // cap_mem_map_t cm_map; /* maintains locations of capabilities in memory */
-    // cap_rev_tree_t cr_tree; /* capability revocation tree */
+    bool cap_mem;
 
     target_ulong data_to_store_with_cap;
     bool load_is_cap; /* whether the load result is a capability */

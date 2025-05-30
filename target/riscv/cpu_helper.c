@@ -677,7 +677,6 @@ void riscv_cpu_update_h_int(CPURISCVState *env, int capslock_irq, int level) {
     env->cis = (env->cis & ~mask_cis) | (value & mask_cis);
     env->mip = (env->mip & ~mask_mip) | (value & mask_mip);
 
-    // FIXME: a hack to lower supervisor-external
     if(level == 0 && capslock_irq == IRQ_S_EXT) {
         env->mip &= ~(uint64_t)MIP_SEIP;
     }
