@@ -117,14 +117,7 @@ typedef struct DisasContext {
     bool frm_valid;
     /* TCG of the current insn_start */
     TCGOp *insn_start;
-    /* Use CapsLock capabilities for memory accesses */
-    bool cap_mem;
 } DisasContext;
-
-
-static inline bool disas_context_in_c_mode(DisasContext *ctx) {
-    return ctx->priv == PRV_C && ctx->cap_mem;
-}
 
 
 
@@ -388,18 +381,6 @@ static TCGv dest_gprh(DisasContext *ctx, int reg_num)
     return cpu_gprh[reg_num];
 }
 
-static void gen_reg_overwrite(DisasContext *ctx, int reg_num) {
-    assert(reg_num != 0);
-    TCGv_i32 tag = cpu_gpr_tag[reg_num];
-    TCGLabel *skip_l;
-
-    skip_l = gen_new_label();
-
-    tcg_gen_brcondi_i32(TCG_COND_EQ, tag, 0, skip_l);
-    gen_helper_reg_overwrite(cpu_env, tcg_constant_i32(reg_num));
-    gen_set_label(skip_l);
-}
-
 static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs1, int rs2, TCGv_i32 tag1, TCGv_i32 tag2)
 {
     TCGLabel *l, *fin;
@@ -407,7 +388,6 @@ static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs1, 
     if (reg_num != 0) {
         switch (get_ol(ctx)) {
         case MXL_RV32:
-            gen_reg_overwrite(ctx, reg_num);
             tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
             tcg_gen_ext32s_tl(cpu_gpr[reg_num], t);
             break;
@@ -427,7 +407,6 @@ static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs1, 
                     tcg_gen_or_i32(tag, tag1, tag2);
                 }
                 tcg_gen_brcondi_i32(TCG_COND_NE, tag, 0x0, l);
-                gen_reg_overwrite(ctx, reg_num);
                 tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
                 tcg_gen_mov_tl(cpu_gpr[reg_num], t);
                 tcg_gen_br(fin);
@@ -436,7 +415,6 @@ static void gen_set_gpr_tagged(DisasContext *ctx, int reg_num, TCGv t, int rs1, 
                 gen_helper_move_cap(cpu_env, t, tcg_constant_i32(reg_num), tcg_constant_i32(rs1), tcg_constant_i32(rs2));
                 gen_set_label(fin);
             } else {
-                gen_reg_overwrite(ctx, reg_num);
                 tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
                 tcg_gen_mov_tl(cpu_gpr[reg_num], t);
             }
@@ -462,7 +440,6 @@ static void gen_set_gpri(DisasContext *ctx, int reg_num, target_long imm)
 {
     if (reg_num != 0) {
         TCGv_i32 dest_tag = cpu_gpr_tag[reg_num];
-        gen_reg_overwrite(ctx, reg_num);
         tcg_gen_mov_i32(dest_tag, tcg_constant_i32(0));
         switch (get_ol(ctx)) {
         case MXL_RV32:
@@ -1270,7 +1247,6 @@ static void riscv_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
     ctx->itrigger = FIELD_EX32(tb_flags, TB_FLAGS, ITRIGGER);
     ctx->zero = tcg_constant_tl(0);
     ctx->virt_inst_excp = false;
-    ctx->cap_mem = FIELD_EX32(tb_flags, TB_FLAGS, CAP_MEM);
 }
 
 static void riscv_tr_tb_start(DisasContextBase *db, CPUState *cpu)

@@ -1185,8 +1185,6 @@ DEF_HELPER_6(vfwmaccbf16_vf, void, ptr, ptr, i64, ptr, env, i32)
 
 
 /* CapsLock helpers */
-DEF_HELPER_4(csscc, void, env, i32, i32, i32)
-DEF_HELPER_4(cslcc, void, env, i32, i32, i32)
 DEF_HELPER_2(csrevoke, void, env, i32)
 DEF_HELPER_4(csborrow, void, env, i32, i32, i32)
 DEF_HELPER_4(csborrowmut, void, env, i32, i32, i32)
@@ -1195,9 +1193,7 @@ DEF_HELPER_4(csshrink, void, env, i32, i32, i32)
 DEF_HELPER_4(csshrinkto, void, env, i32, i32, tl)
 DEF_HELPER_4(cssplit, void, env, i32, i32, i32)
 DEF_HELPER_4(cstighten, void, env, i32, i32, i32)
-DEF_HELPER_3(csseal, void, env, i32, i32)
 DEF_HELPER_2(csdrop, void, env, i32)
-DEF_HELPER_4(csccsrrw, void, env, i32, i32, tl)
 DEF_HELPER_3(csloadsp, void, env, i32, i32)
 DEF_HELPER_3(csgencapstack, void, env, i32, tl)
 
@@ -1210,15 +1206,8 @@ DEF_HELPER_5(move_cap, void, env, tl, i32, i32, i32)
 DEF_HELPER_4(set_cap_mem_map, void, env, i32, tl, tl)
 DEF_HELPER_3(remove_cap_mem_map, void, env, tl, i32)
 
-DEF_HELPER_2(set_pc_cap, void, env, i32)
-
 /* Helpers for debug instructions */
-DEF_HELPER_4(csdebuggencap, void, env, i32, tl, tl)
-DEF_HELPER_2(csdebugoncapmem, void, env, tl)
-DEF_HELPER_1(csdebugclearcmmap, void, env)
 DEF_HELPER_2(csdebugprint, void, env, i32)
 DEF_HELPER_2(capslock_debugger, void, env, tl)
 DEF_HELPER_3(csdebugcount, void, env, tl, tl)
 DEF_HELPER_1(csdebugcountprint, void, env)
-
-DEF_HELPER_2(reg_overwrite, void, env, i32)

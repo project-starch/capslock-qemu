@@ -145,9 +145,6 @@ void cpu_get_tb_cpu_state(CPURISCVState *env, vaddr *pc,
     if (env->cur_pmbase != 0) {
         flags = FIELD_DP32(flags, TB_FLAGS, PM_BASE_ENABLED, 1);
     }
-    if (env->cap_mem) {
-        flags = FIELD_DP32(flags, TB_FLAGS, CAP_MEM, 1);
-    }
 
     *pflags = flags;
 }
@@ -423,21 +420,6 @@ static int riscv_cpu_local_irq_pending(CPURISCVState *env)
 {
     int virq;
     uint64_t irqs, pending, mie, hsie, vsie;
-
-    if(env->cap_mem) {
-        /* Check H-interrupts */
-        /* H-interrupts take precedence over V-interrupts */
-
-        if(env->cis && env->cih.tag) {
-            // just get any pending IRQ
-            int nxt_irq;
-            for(nxt_irq = 0; (env->cis >> nxt_irq) &&
-                !((env->cis >> nxt_irq) & 1);
-                ++ nxt_irq);
-            assert(((env->cis) >> nxt_irq) & 1);
-            return nxt_irq;
-        }
-    }
 
     /* Determine interrupt enable state of all privilege modes */
     if (env->virt_enabled) {

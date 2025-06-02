@@ -337,7 +337,7 @@ target_ulong helper_mret(CPURISCVState *env)
         riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
     }
 
-    target_ulong retpc = env->cap_mem ? env->cepc.val.scalar : env->mepc;
+    target_ulong retpc = env->mepc;
     if (!riscv_has_ext(env, RVC) && (retpc & 0x3)) {
         riscv_raise_exception(env, RISCV_EXCP_INST_ADDR_MIS, GETPC());
     }
@@ -360,12 +360,6 @@ target_ulong helper_mret(CPURISCVState *env)
     mstatus = set_field(mstatus, MSTATUS_MPV, 0);
     if ((env->priv_ver >= PRIV_VERSION_1_12_0) && (prev_priv != PRV_M)) {
         mstatus = set_field(mstatus, MSTATUS_MPRV, 0);
-    }
-    if (env->cap_mem && prev_priv != PRV_M && !env->ctvec.tag) {
-        uint64_t ctvec_addr = env->ctvec.val.scalar;
-        env->ctvec.val.cap = env->pc_cap;
-        env->ctvec.val.cap.cursor = ctvec_addr;
-        env->ctvec.tag = true;
     }
     env->mstatus = mstatus;
     riscv_cpu_set_mode(env, prev_priv);
@@ -600,81 +594,6 @@ static capregval_t *cap_stack_lookup(CPURISCVState *env, uint64_t addr, capregva
     }
 }
 
-void helper_csscc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
-    capregval_t *rs2_v = &env->gpr[rs2];
-
-    assert(rs1_v->tag && !rs2_v->tag);
-
-    assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
-           rs1_v->val.cap.type != CAP_TYPE_SEALED);
-
-    capaddr_t cursor = rs2_v->val.scalar;
-
-    if(rs1 != rd) {
-        *rd_v = *rs1_v;
-        if(!captype_is_copyable(rs1_v->val.cap.type)) {
-            *rs1_v = CAPREGVAL_NULL;
-        }
-    }
-
-    rd_v->val.cap.cursor = cursor;
-}
-
-void helper_cslcc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t imm) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
-
-    bool check_passed = true;
-    // we allow 2 (cursor) to be queried for scalar values too
-    if (imm != 8 && imm != 2) {
-        check_passed = check_passed && rs1_v->tag;
-        check_passed = check_passed && (imm != 4 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
-        check_passed = check_passed && (imm != 5 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
-        check_passed = check_passed && (imm != 6 || rs1_v->val.cap.type == CAP_TYPE_SEALED || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
-        check_passed = check_passed && (imm != 7 || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
-    }
-    if (!check_passed) {
-        CAPSLOCK_DEBUG_PRINT("Invalid operands to lcc!\n");
-        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
-        return;
-    }
-    switch(imm) {
-        case 0:
-            pthread_mutex_lock(&cr_tree_lock);
-            capregval_set_scalar(rd_v, cap_rev_tree_check_valid(rs1_v->val.cap.bounds[0].rev_node) ? 1 : 0); // TODO: let's say it's always valid for now
-            pthread_mutex_unlock(&cr_tree_lock);
-            break;
-        case 1:
-            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.type);
-            break;
-        case 2:
-            capregval_set_scalar(rd_v, rs1_v->val.cap.cursor);
-            break;
-        case 3:
-            capregval_set_scalar(rd_v, rs1_v->val.cap.bounds[0].base);
-            break;
-        case 4:
-            capregval_set_scalar(rd_v, rs1_v->val.cap.bounds[0].end);
-            break;
-        case 5:
-            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.perms);
-            break;
-        case 6:
-            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.async);
-            break;
-        case 7:
-            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.reg);
-            break;
-        case 8:
-            capregval_set_scalar(rd_v, rs1_v->tag ? 1 : 0);
-            break;
-        default:
-            capregval_set_scalar(rd_v, 0);
-    }
-}
-
 static void drop_impl(CPURISCVState *env, capregval_t *rv, bool is_stack) {
     if (rv->tag) {
         pthread_mutex_lock(&cr_tree_lock);
@@ -745,8 +664,6 @@ static void borrow_impl(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t 
             pthread_mutex_unlock(&cr_tree_lock);
             riscv_raise_exception_bp(env, RISCV_EXCP_INVALID_CAP, GETPC());
         }
-
-        reg_overwrite(&cr_tree, rd_v);
 
         uintptr_t base = rs1_v->val.scalar;
         uintptr_t end;
@@ -839,7 +756,6 @@ void helper_csshrinkto(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t s
 
     assert((int64_t)size >= 0);
 
-    reg_overwrite(&cr_tree, rd_v);
     *rd_v = *rs1_v;
     rd_v->val.cap.bounds[0].base = rd_v->val.cap.cursor;
     rd_v->val.cap.bounds[0].end = rd_v->val.cap.cursor + size;
@@ -887,86 +803,6 @@ void helper_csgencapstack(CPURISCVState *env, uint32_t rs, uint64_t size) {
     cap_rev_tree_update_refcount_cap(&env->sp_stack[env->sp_stack_n].val.cap, 1);
     pthread_mutex_unlock(&cr_tree_lock);
     ++ env->sp_stack_n;
-}
-
-void helper_csseal(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
-
-    if(!rs1_v->tag) {
-        CAPSLOCK_DEBUG_PRINT("Sealing requires a capability\n");
-        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
-    }
-
-    if(rs1_v->val.cap.type != CAP_TYPE_LIN) {
-        CAPSLOCK_DEBUG_PRINT("Sealing requires a linear capability\n");
-        riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, GETPC());
-    }
-
-    if(!cap_perms_allow(rs1_v->val.cap.perms, CAP_PERMS_RW)) {
-        CAPSLOCK_DEBUG_PRINT("Sealing requires a RW capability\n");
-        riscv_raise_exception(env, RISCV_EXCP_INSUF_CAP_PERMS, GETPC());
-    }
-
-    if(cap_size(&rs1_v->val.cap.bounds[0]) < CAP_SEALED_SIZE_MIN ||
-       !cap_aligned(&rs1_v->val.cap.bounds[0], 4)) {
-        CAPSLOCK_DEBUG_PRINT("Sealing requires an aligned region of sufficient size\n");
-    }
-
-    reg_overwrite(&cr_tree, rd_v);
-    *rd_v = *rs1_v;
-    rd_v->val.cap.type = CAP_TYPE_SEALED;
-    rd_v->val.cap.async = CAP_ASYNC_SYNC;
-
-    if(rd != rs1) {
-        *rs1_v = CAPREGVAL_NULL;
-    }
-}
-
-void helper_csccsrrw(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint64_t ccsr_id) {
-    capregval_t *rd_v = &env->gpr[rd];
-    capregval_t *rs1_v = &env->gpr[rs1];
-    capregval_t *ccsr = NULL;
-    capregval_t tmp;
-
-    CPUState* cpu = env_cpu(env);
-
-    bool needs_tlb_flush = false;
-
-    switch((capslock_ccsr_id_t)ccsr_id) {
-        case CAPSLOCK_CCSR_CTVEC:
-            ccsr = &env->ctvec;
-            break;
-        case CAPSLOCK_CCSR_CIH:
-            assert(!env->cih.tag); /* only writable when originally not a capability */
-            ccsr = &env->cih;
-            break;
-        case CAPSLOCK_CCSR_CEPC:
-            ccsr = &env->cepc;
-            break;
-        case CAPSLOCK_CCSR_CSCRATCH:
-            ccsr = &env->cscratch;
-            break;
-        default:
-            if((ccsr_id & CAPSLOCK_CCSR_CPMP_MASK) == CAPSLOCK_CCSR_CPMP_PAT) {
-                ccsr = &env->cpmp[ccsr_id & CAPSLOCK_CCSR_CPMP_IND_MASK];
-                needs_tlb_flush = true;
-                break;
-            }
-            assert(false); // not a valid CCSR
-    }
-
-    tmp = *ccsr;
-    *ccsr = *rs1_v;
-    if(!captype_is_copyable(rs1_v->val.cap.type)) {
-        *rs1_v = CAPREGVAL_NULL;
-    }
-    reg_overwrite(&cr_tree, rd_v);
-    *rd_v = tmp;
-
-    if(needs_tlb_flush) {
-        tlb_flush(cpu);
-    }
 }
 
 /* Capability-based memory access */
@@ -1104,7 +940,6 @@ void helper_store_with_cap(CPURISCVState *env, uint64_t addr, uint32_t rs1, uint
 
 // check if the location has a capability, if it does, retrieve it from the cap map
 void helper_check_cap_load(CPURISCVState *env, uint64_t addr, uint32_t rd, uint32_t memop) {
-    reg_overwrite(&cr_tree, &env->gpr[rd]);
     if (memop_size((MemOp)memop) != 8) {
         env->gpr[rd].tag = false;
         return;
@@ -1146,37 +981,7 @@ void helper_remove_cap_mem_map(CPURISCVState *env, uint64_t addr, uint32_t memop
 
 /* helpers for CapsLock control transfer instructions */
 
-/* Write the content of the specified register into PC reg */
-/* This does not touch PC itself */
-void helper_set_pc_cap(CPURISCVState *env, uint32_t reg) {
-    capregval_t *v = &env->gpr[reg];
-
-    if(!v->tag) {
-        CAPSLOCK_DEBUG_PRINT("PC cap must be a capability\n");
-        riscv_raise_exception(env, RISCV_EXCP_UNEXP_OP_TYPE, GETPC());
-    }
-
-    env->pc_cap = v->val.cap;
-}
-
 /* helpers for CapsLock debug instructions */
-
-void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
-    assert(rs1_v <= rs2_v);
-    capregval_t *rd_v = &env->gpr[rd];
-    reg_overwrite(&cr_tree, rd_v);
-    cap_generate(rd_v, rs1_v, rs2_v);
-}
-
-void helper_csdebugoncapmem(CPURISCVState *env, uint64_t rs1_v) {
-    env->cap_mem = rs1_v != 0;
-}
-
-void helper_csdebugclearcmmap(CPURISCVState *env) {
-    pthread_mutex_lock(&cr_tree_lock);
-    cap_mem_map_clear(&cm_map);
-    pthread_mutex_unlock(&cr_tree_lock);
-}
 
 void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];
@@ -1267,10 +1072,6 @@ void helper_move_cap(CPURISCVState *env, uint64_t v, uint32_t rd_v, uint32_t rs1
     memcpy(env->gpr[rd_v].val.cap.bounds, t_bounds, sizeof(t_bounds));
     env->gpr[rd_v].val.cap.cursor = v;
     env->gpr[rd_v].tag = true;
-}
-
-void helper_reg_overwrite(CPURISCVState *env, uint32_t reg_num) {
-    reg_overwrite(&cr_tree, &env->gpr[reg_num]);
 }
 
 struct stackframe {

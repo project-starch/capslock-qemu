@@ -1596,23 +1596,13 @@ static void riscv_cpu_set_irq(void *opaque, int irq, int level)
         case IRQ_VS_EXT:
         case IRQ_M_EXT:
             assert(!kvm_enabled());
-            if(env->cap_mem) {
-                int capslock_irq = riscv_conflate_irq(irq);
-                riscv_cpu_update_h_int(env, capslock_irq, level);
-            } else {
-                riscv_cpu_update_mip(env, 1 << irq, BOOL_TO_MASK(level));
-            }
-             break;
+            riscv_cpu_update_mip(env, 1 << irq, BOOL_TO_MASK(level));
+            break;
         case IRQ_S_EXT:
             assert(!kvm_enabled());
             env->external_seip = level;
-            if(env->cap_mem) {
-                int capslock_irq = riscv_conflate_irq(irq);
-                riscv_cpu_update_h_int(env, capslock_irq, level | env->software_seip);
-            } else {
-                riscv_cpu_update_mip(env, 1 << irq,
-                                     BOOL_TO_MASK(level | env->software_seip));
-            }
+            riscv_cpu_update_mip(env, 1 << irq,
+                                    BOOL_TO_MASK(level | env->software_seip));
             break;
         default:
             g_assert_not_reached();

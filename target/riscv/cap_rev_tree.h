@@ -90,10 +90,6 @@ inline static void cap_rev_tree_update_refcount(cap_rev_node_t *node, int32_t de
     node->refcount += delta;
 }
 
-inline static void reg_overwrite(cap_rev_tree_t *tree, capregval_t *v) {
-
-}
-
 inline static void cap_rev_tree_update_refcount_cap(capfat_t *cap, int32_t delta) {
     for (int i = 0; i < CAP_MAX_PROVENANCE_N; i ++)
         if (cap->bounds[i].rev_node != NULL)

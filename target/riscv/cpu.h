@@ -386,8 +386,6 @@ struct CPUArchState {
     target_ulong cic;
     target_ulong offsetmmu;
 
-    bool cap_mem;
-
     target_ulong data_to_store_with_cap;
     bool load_is_cap; /* whether the load result is a capability */
     capboundsfat_t load_cap_bounds;
