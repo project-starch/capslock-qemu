@@ -615,6 +615,81 @@ static void drop_impl(CPURISCVState *env, capregval_t *rv, bool is_stack) {
     }
 }
 
+void helper_csscc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+    capregval_t *rd_v = &env->gpr[rd];
+    capregval_t *rs1_v = &env->gpr[rs1];
+    capregval_t *rs2_v = &env->gpr[rs2];
+
+    assert(rs1_v->tag && !rs2_v->tag);
+
+    assert(rs1_v->val.cap.type != CAP_TYPE_UNINIT &&
+           rs1_v->val.cap.type != CAP_TYPE_SEALED);
+
+    capaddr_t cursor = rs2_v->val.scalar;
+
+    if(rs1 != rd) {
+        *rd_v = *rs1_v;
+        if(!captype_is_copyable(rs1_v->val.cap.type)) {
+            *rs1_v = CAPREGVAL_NULL;
+        }
+    }
+
+    rd_v->val.cap.cursor = cursor;
+}
+
+void helper_cslcc(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t imm) {
+    capregval_t *rd_v = &env->gpr[rd];
+    capregval_t *rs1_v = &env->gpr[rs1];
+
+    bool check_passed = true;
+    // we allow 2 (cursor) to be queried for scalar values too
+    if (imm != 8 && imm != 2) {
+        check_passed = check_passed && rs1_v->tag;
+        check_passed = check_passed && (imm != 4 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
+        check_passed = check_passed && (imm != 5 || (rs1_v->val.cap.type != CAP_TYPE_SEALED && rs1_v->val.cap.type != CAP_TYPE_SEALEDRET));
+        check_passed = check_passed && (imm != 6 || rs1_v->val.cap.type == CAP_TYPE_SEALED || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
+        check_passed = check_passed && (imm != 7 || rs1_v->val.cap.type == CAP_TYPE_SEALEDRET);
+    }
+    if (!check_passed) {
+        CAPSLOCK_DEBUG_PRINT("Invalid operands to lcc!\n");
+        riscv_raise_exception(env, RISCV_EXCP_ILLEGAL_INST, GETPC());
+        return;
+    }
+    switch(imm) {
+        case 0:
+            pthread_mutex_lock(&cr_tree_lock);
+            capregval_set_scalar(rd_v, cap_rev_tree_check_valid(rs1_v->val.cap.bounds[0].rev_node) ? 1 : 0); // TODO: let's say it's always valid for now
+            pthread_mutex_unlock(&cr_tree_lock);
+            break;
+        case 1:
+            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.type);
+            break;
+        case 2:
+            capregval_set_scalar(rd_v, rs1_v->val.cap.cursor);
+            break;
+        case 3:
+            capregval_set_scalar(rd_v, rs1_v->val.cap.bounds[0].base);
+            break;
+        case 4:
+            capregval_set_scalar(rd_v, rs1_v->val.cap.bounds[0].end);
+            break;
+        case 5:
+            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.perms);
+            break;
+        case 6:
+            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.async);
+            break;
+        case 7:
+            capregval_set_scalar(rd_v, (capaddr_t)rs1_v->val.cap.reg);
+            break;
+        case 8:
+            capregval_set_scalar(rd_v, rs1_v->tag ? 1 : 0);
+            break;
+        default:
+            capregval_set_scalar(rd_v, 0);
+    }
+}
+
 void helper_csrevoke(CPURISCVState *env, uint32_t rs1) {
     assert(false && "Not supposed to be used");
     capregval_t *rs1_v = &env->gpr[rs1];
@@ -982,6 +1057,13 @@ void helper_remove_cap_mem_map(CPURISCVState *env, uint64_t addr, uint32_t memop
 /* helpers for CapsLock control transfer instructions */
 
 /* helpers for CapsLock debug instructions */
+
+void helper_csdebuggencap(CPURISCVState *env, uint32_t rd, uint64_t rs1_v, uint64_t rs2_v) {
+    assert(rs1_v <= rs2_v);
+    capregval_t *rd_v = &env->gpr[rd];
+    // reg_overwrite(&cr_tree, rd_v);
+    cap_generate(rd_v, rs1_v, rs2_v);
+}
 
 void helper_csdebugprint(CPURISCVState *env, uint32_t rs1) {
     capregval_t *rs1_v = &env->gpr[rs1];

@@ -1185,6 +1185,8 @@ DEF_HELPER_6(vfwmaccbf16_vf, void, ptr, ptr, i64, ptr, env, i32)
 
 
 /* CapsLock helpers */
+DEF_HELPER_4(csscc, void, env, i32, i32, i32)
+DEF_HELPER_4(cslcc, void, env, i32, i32, i32)
 DEF_HELPER_2(csrevoke, void, env, i32)
 DEF_HELPER_4(csborrow, void, env, i32, i32, i32)
 DEF_HELPER_4(csborrowmut, void, env, i32, i32, i32)
@@ -1207,6 +1209,7 @@ DEF_HELPER_4(set_cap_mem_map, void, env, i32, tl, tl)
 DEF_HELPER_3(remove_cap_mem_map, void, env, tl, i32)
 
 /* Helpers for debug instructions */
+DEF_HELPER_4(csdebuggencap, void, env, i32, tl, tl)
 DEF_HELPER_2(csdebugprint, void, env, i32)
 DEF_HELPER_2(capslock_debugger, void, env, tl)
 DEF_HELPER_3(csdebugcount, void, env, tl, tl)
