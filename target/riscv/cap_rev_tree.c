@@ -289,7 +289,7 @@ bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t
     int i;
     for(i = 0; i < CAP_MAX_PROVENANCE_N; i ++) {
         if (bounds[i].rev_node != NULL &&
-                cap_in_bounds(&bounds[i], addr, (capaddr_t)size))
+                cap_in_bounds(&bounds[i], addr, (capaddr_t)1))
             break;
         if (bounds[i].rev_node != NULL && !cap_is_far_oob(&bounds[i], addr))
             _is_far_oob = false;
@@ -298,7 +298,7 @@ bool cap_bounds_collapse(cap_rev_tree_t *tree, capboundsfat_t *bounds, capaddr_t
         _is_far_oob = false;
         for(int j = i; j < CAP_MAX_PROVENANCE_N; j ++) {
             if (bounds[j].rev_node != NULL &&
-                cap_in_bounds(&bounds[j], addr, (capaddr_t)size) &&
+                cap_in_bounds(&bounds[j], addr, (capaddr_t)1) &&
                 (bounds[j].rev_node->alloc_id > bounds[i].rev_node->alloc_id
                 || (
                     bounds[j].rev_node->alloc_id == bounds[i].rev_node->alloc_id &&

@@ -577,6 +577,7 @@ static void cap_generate(capregval_t *v, uint64_t base, uint64_t end) {
     cap->bounds[0].rev_node->range.base = base;
     cap->bounds[0].rev_node->range.end = end;
     cap->bounds[0].rev_node->ty = CAP_REV_NODE_TYPE_REF;
+    cap->bounds[0].rev_node->on_stack = false;
     // cap_rev_tree_mark_unsafecell(&cr_tree, cap->bounds[0].rev_node, CAP_REV_NODE_TYPE_UNSAFECELL);
     pthread_mutex_unlock(&cr_tree_lock);
     v->tag = true;
@@ -873,6 +874,7 @@ void helper_csgencapstack(CPURISCVState *env, uint32_t rs, uint64_t size) {
     assert(env->sp_stack_n < SP_STACK_SIZE);
 
     cap_generate(&env->sp_stack[env->sp_stack_n], base, end);
+    env->sp_stack[env->sp_stack_n].val.cap.bounds[0].rev_node->on_stack = true;
     assert(env->sp_stack[env->sp_stack_n].tag && cap_rev_tree_check_valid(env->sp_stack[env->sp_stack_n].val.cap.bounds[0].rev_node));
     pthread_mutex_lock(&cr_tree_lock);
     cap_rev_tree_update_refcount_cap(&env->sp_stack[env->sp_stack_n].val.cap, 1);
@@ -946,6 +948,14 @@ static void _helper_access_with_cap(CPURISCVState *env, uint64_t addr, uint32_t 
             range.base = addr;
             range.end = addr + size;
             assert(cap_rev_tree_access(&cr_tree, cap->bounds[0].rev_node, &range, is_store, env->pc));
+        } else if (!is_far_oob && !cap->bounds[0].rev_node->on_stack) {
+            // If too far OOB, we don't consider it a violation (potentially bad provenance tracking)
+            CAPSLOCK_DEBUG_PRINT("Capability access OOB %lx size = %x @ pc = %lx\n", addr, size, env->pc);
+            print_bounds(cap);
+
+            pthread_mutex_unlock(&cr_tree_lock);
+            RISCVException excp = is_store ? RISCV_EXCP_STORE_AMO_ACCESS_FAULT : RISCV_EXCP_LOAD_ACCESS_FAULT;
+            riscv_raise_exception_bp(env, excp, GETPC());
         } else {
             env->gpr[rs1].tag = false;
         }
